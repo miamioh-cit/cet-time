@@ -59,3 +59,13 @@ Live Trello credentials/webhook delivery and your HTTPS ingress must be verified
 ## Branding
 
 ACETime uses navy blue `#1D2458` and red `#E41937`, sampled from the supplied Miami University Polytechnic logo. Colors are defined in `static/style.css`; the sidebar, login wordmark, and browser title use the ACETime name.
+
+## Individual break reminders
+
+Open **Break reminders** to review student break clocks. The default threshold is **4 hours**, with a warning up to **15 minutes before** it is reached. Instructors can change the default or set a threshold for one Trello member (0.25–24 hours), and can reset that member to the default. Settings and per-student snoozes persist in the existing database; no schema migration or new Jenkins credential is required.
+
+A break clock measures a student's current continuous working streak across their assigned cards. Overlapping timers count once. If at least one card remains working, the streak continues; pausing/finishing all working cards ends the streak, and the next working interval starts a new one. A reminder does not move cards or alter recorded hours. Students should move their working cards to **In Process (paused)** when actually taking a break. Students can snooze their own warning for 15 minutes.
+
+Every signed-in student receives an in-app reminder on any screen. **Enable browser notifications** requests permission for an optional desktop alert to that student; instructors viewing student clocks do not receive the student's desktop alerts. The app checks reminders every 30 seconds; browser background throttling, operating-system notification settings, or network failures can delay alerts. ACETime must remain open and signed in. No closed-browser push, email, Slack, or Trello messages are sent. This is a configurable work reminder, not a payroll or break-compliance system.
+
+The sample preview includes **Show a near-4-hour example** on the Break reminders screen so you can try reminders without waiting four hours.

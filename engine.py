@@ -64,3 +64,29 @@ def summarize(sessions, confirmations, cards, member, start, end, now, verified_
         g=grouped.setdefault(s['card'],{'activity':c.get('name','Task'),'seconds':0,'verified':True,'list':c.get('idList')})
         g['seconds']+=seconds; g['verified'] &= approved is not None
     return list(grouped.values())
+
+
+def break_reminder(sessions, member, now, threshold_hours=4, snooze=None):
+    """Union a student's working intervals; only the currently active streak counts."""
+    intervals=[]
+    for s in sessions:
+        if s['member'] != member or s['start'] > now:
+            continue
+        end=now if s['end'] is None else min(s['end'],now)
+        if end >= s['start']:
+            intervals.append((s['start'],end,s['end'] is None))
+    merged=[]
+    for start,end,active in sorted(intervals):
+        if merged and start <= merged[-1][1]:
+            merged[-1][1]=max(merged[-1][1],end)
+            merged[-1][2] |= active
+        else:
+            merged.append([start,end,active])
+    current=next((x for x in reversed(merged) if x[2]),None)
+    threshold=float(threshold_hours)*3600
+    lead=min(15*60,threshold/4)
+    start=current[0] if current else None
+    elapsed=max(0,now-start) if current else 0
+    status='due' if current and elapsed >= threshold else 'soon' if current and elapsed >= threshold-lead else 'working' if current else 'idle'
+    snoozed=bool(current and snooze and snooze.get('streakStart')==start and snooze.get('until',0)>now)
+    return {'member':member,'streakStart':start,'elapsedSeconds':elapsed,'thresholdHours':float(threshold_hours),'leadMinutes':lead/60,'remainingSeconds':max(0,threshold-elapsed),'status':status,'snoozed':snoozed,'snoozedUntil':snooze.get('until') if snoozed else None,'notify':status in ('soon','due') and not snoozed}

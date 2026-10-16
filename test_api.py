@@ -55,4 +55,26 @@ class ApiTests(unittest.TestCase):
         c=self.login('bob');_,r,_=self.request('/api/state',{},c)
         self.assertTrue(all(s['member']=='bob' for s in r['sessions']))
         self.assertEqual(r['confirmations'],{})
+    def test_05_break_reminders_are_private_and_snooze_is_own(self):
+        from unittest.mock import patch
+        n=time.time();sessions=[{'id':'a','card':'c','member':'alice','start':n-14500,'end':None},{'id':'b','card':'c','member':'bob','start':n-100,'end':None}]
+        with patch.object(self.s,'state',return_value=([],sessions)):
+            c=self.login('alice');status,r,_=self.request('/api/reminders',{'member':'bob'},c)
+            self.assertEqual(status,200);self.assertEqual(set(r['reminders']),{'alice'});self.assertTrue(r['reminders']['alice']['notify'])
+            self.assertEqual(self.request('/api/snooze-break',{'member':'bob'},c)[0],200)
+            _,r,_=self.request('/api/reminders',{},c);self.assertFalse(r['reminders']['alice']['notify'])
+            with self.s.connect() as db:
+                self.assertIsNone(self.s.get(db,'break_snooze:bob'))
+    def test_06_only_instructor_can_change_default_and_individual_thresholds(self):
+        c=self.login('alice');self.assertEqual(self.request('/api/break-settings',{'hours':2},c)[0],403)
+        admin=self.login('admin')
+        self.assertEqual(self.request('/api/break-settings',{'hours':3},admin)[0],200)
+        self.assertEqual(self.request('/api/break-settings',{'hours':2,'member':'alice'},admin)[0],200)
+        _,s,_=self.request('/api/state',{},admin)
+        self.assertEqual(s['breakSettings'],{'defaultHours':3,'overrides':{'alice':2}})
+        for hours in (0,25,'NaN','Infinity'):
+            self.assertEqual(self.request('/api/break-settings',{'hours':hours},admin)[0],400)
+        self.assertEqual(self.request('/api/break-settings',{'hours':2,'member':'not-on-board'},admin)[0],400)
+        self.assertEqual(self.request('/api/break-settings',{'member':'alice','reset':True},admin)[0],200)
+        _,s,_=self.request('/api/state',{},admin);self.assertEqual(s['breakSettings']['overrides'],{})
 if __name__=='__main__':unittest.main()

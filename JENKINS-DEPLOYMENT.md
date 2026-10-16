@@ -93,3 +93,7 @@ Local validation covers application tests and deployment rendering. A live Docke
 - Kubernetes CLI plugin, for installations that use withKubeConfig: https://plugins.jenkins.io/kubernetes-cli/
 - Kubernetes volume security contexts: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
 - Kubernetes persistent volumes: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+
+## Updating break reminders
+
+Run the pipeline to deploy the break-reminder feature. There are no new Jenkins credentials, environment variables, or migrations. As instructor, open **Break reminders** to change the four-hour default or add a student-specific override. Students enable optional browser notifications in their own signed-in sessions. Keep the app open for reminders; no external messaging service is configured.

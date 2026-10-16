@@ -4,7 +4,7 @@ from http.cookies import SimpleCookie
 from datetime import datetime,timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
-from engine import replay,stamp,summarize
+from engine import replay,stamp,summarize,break_reminder
 ROOT=Path(__file__).parent
 DB=os.getenv('DATABASE_PATH','data/tracker.db'); Path(DB).parent.mkdir(parents=True,exist_ok=True)
 ORIGIN=os.getenv('PUBLIC_URL','http://localhost:8080').rstrip('/')
@@ -66,6 +66,15 @@ def sync(db):
     members=trello('boards/'+cfg['board']+'/members',{'fields':'fullName,username'})
     put(db,'members',members);put(db,'last_sync',time.time())
 
+
+def break_settings(db):
+    return get(db,'break_settings',{'defaultHours':4.0,'overrides':{}})
+
+def reminders(db,sessions,user):
+    settings=break_settings(db)
+    mids={s['member'] for s in sessions} | {m['id'] for m in get(db,'members',[])} if user['admin'] else {user['member']}
+    return {m:break_reminder(sessions,m,time.time(),settings['overrides'].get(m,settings['defaultHours']),get(db,'break_snooze:'+m)) for m in mids if m}
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self,*args):pass # Avoid logging URLs, passwords, webhook bodies or tokens.
     def send(self,data,status=200,headers=None):
@@ -85,7 +94,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.send_response(200 if self.path=='/webhook' else 404);self.end_headers()
     def do_GET(self):
-        if self.path in ('/','/app.js','/style.css'):
+        if self.path in ('/','/app.js','/break-reminders.js','/style.css'):
             path=ROOT/'static'/({'/':'index.html'}.get(self.path,self.path[1:]))
             raw=path.read_bytes();self.send_response(200)
             self.send_header('Content-Type',{'html':'text/html; charset=utf-8','js':'text/javascript','css':'text/css'}[path.suffix[1:]])
@@ -116,7 +125,7 @@ class Handler(BaseHTTPRequestHandler):
                 if self.path=='/api/logout':
                     db.execute('DELETE FROM logins WHERE user=?',(user['id'],));return self.send({'ok':True},headers={'Set-Cookie':'session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict'})
                 admin=bool(user['admin'])
-                if self.path in ('/api/boards','/api/inspect','/api/config','/api/users','/api/webhook') and not admin:return self.send({'error':'Instructor access required'},403)
+                if self.path in ('/api/boards','/api/inspect','/api/config','/api/users','/api/webhook','/api/break-settings') and not admin:return self.send({'error':'Instructor access required'},403)
                 if self.path=='/api/boards':return self.send(trello('members/me/boards',{'fields':'name,url','filter':'open'}))
                 if self.path=='/api/inspect':
                     bid=str(data['board'])
@@ -148,9 +157,33 @@ class Handler(BaseHTTPRequestHandler):
                 if self.path=='/api/sync':
                     if not admin:return self.send({'error':'Instructor sync required'},403)
                     sync(db);return self.send({'ok':True})
+                if self.path=='/api/break-settings':
+                    import math
+                    settings=break_settings(db);mid=data.get('member')
+                    if mid and mid not in {m['id'] for m in get(db,'members',[])}:raise ValueError('Choose a member of the configured board.')
+                    if mid and data.get('reset'):
+                        settings['overrides'].pop(mid,None)
+                    else:
+                        hours=float(data['hours'])
+                        if not math.isfinite(hours) or not 0.25 <= hours <= 24:raise ValueError('Break reminder hours must be between 0.25 and 24.')
+                        if mid:settings['overrides'][mid]=hours
+                        else:settings['defaultHours']=hours
+                    put(db,'break_settings',settings)
+                    db.execute('INSERT INTO audit(payload,at) VALUES(?,?)',(json.dumps({'action':'break-settings','member':mid,'settings':settings,'user':user['id']}),time.time()))
+                    return self.send({'ok':True})
                 cards,sessions=state(db);cardmap={c['id']:c for c in cards}
                 member=user['member']
                 if admin:member=data.get('member') or member
+                if self.path=='/api/reminders':
+                    return self.send({'reminders':reminders(db,sessions,user)})
+                if self.path=='/api/snooze-break':
+                    # A student can snooze only their own reminder; request member IDs are ignored.
+                    mid=user['member']
+                    if not mid:raise ValueError('Student login required to snooze a break reminder.')
+                    r=reminders(db,sessions,user).get(mid)
+                    if not r or not r['notify']:raise ValueError('No active break reminder to snooze.')
+                    put(db,'break_snooze:'+mid,{'streakStart':r['streakStart'],'until':time.time()+900})
+                    return self.send({'ok':True})
                 if self.path=='/api/verify':
                     cid=data['card'];cfg=get(db,'config',{})
                     if not member:raise ValueError('Select a student first.')
@@ -170,7 +203,7 @@ class Handler(BaseHTTPRequestHandler):
                 if self.path=='/api/state':
                     cf={r['session']:r['seconds'] for r in db.execute('SELECT * FROM confirmations')}
                     if not admin:sessions=[s for s in sessions if s['member']==member];cards=[c for c in cards if member in c.get('idMembers',[]) or any(s['card']==c['id'] for s in sessions)]
-                    return self.send({'user':{'name':user['name'],'admin':admin,'member':user['member']},'config':get(db,'config'),'members':get(db,'members',[]) if admin else [],'cards':cards,'sessions':sessions,'confirmations':{s['id']:cf[s['id']] for s in sessions if s['id'] in cf},'lastSync':get(db,'last_sync'),'webhook':bool(get(db,'webhook')),'timezone':str(TZ)})
+                    return self.send({'user':{'name':user['name'],'admin':admin,'member':user['member']},'config':get(db,'config'),'members':get(db,'members',[]) if admin else [],'cards':cards,'sessions':sessions,'confirmations':{s['id']:cf[s['id']] for s in sessions if s['id'] in cf},'breakReminders':reminders(db,sessions,user),'breakSettings':break_settings(db) if admin else None,'lastSync':get(db,'last_sync'),'webhook':bool(get(db,'webhook')),'timezone':str(TZ)})
                 if self.path=='/api/report':
                     if not member:raise ValueError('Select a student.')
                     start=datetime.strptime(data['week'],'%Y-%m-%d').replace(tzinfo=TZ)
