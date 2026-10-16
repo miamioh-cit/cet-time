@@ -1,4 +1,4 @@
-# Deploy cet-time from Jenkins to Kubernetes
+# Deploy ACETime from Jenkins to Kubernetes
 
 The included `Jenkinsfile` checks out this repository, runs the tests, builds and pushes the Docker image, resolves its registry digest, applies configuration and secrets, and waits for Kubernetes rollout. Kubernetes authentication defaults to Jenkins credential **`cet-time`**. No running Jenkins job or cluster has been changed by preparing these files.
 

@@ -1,4 +1,4 @@
-# Timewell — student time tracker
+# ACETime — student time tracker
 
 A runnable, self-hosted Trello integration with a student portal, per-student time confirmation, and weekly spreadsheet exports. Python 3.12+ standard library; SQLite persistence; Docker Compose included. The hosted interactive preview is a separate sample-data demonstration, not a connected production tracker.
 
@@ -55,3 +55,7 @@ Students have no password-change/recovery screen in this initial version. Plan a
 Run `python3 -m unittest -v`. Timing tests cover group work, pause/resume, reassignment, reordered events, reopening, late-event confirmation invalidation, baseline activation, weekly clipping, and daylight-saving calendar weeks. API integration tests additionally check login, role enforcement, signed webhooks, duplicate delivery, student-specific verification, and spreadsheet report totals.
 
 Live Trello credentials/webhook delivery and your HTTPS ingress must be verified in your environment. Browser rendering was not tested in the build environment. No live Trello board has been modified by creating this package.
+
+## Branding
+
+ACETime uses navy blue `#1D2458` and red `#E41937`, sampled from the supplied Miami University Polytechnic logo. Colors are defined in `static/style.css`; the sidebar, login wordmark, and browser title use the ACETime name.

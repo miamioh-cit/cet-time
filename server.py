@@ -144,7 +144,7 @@ class Handler(BaseHTTPRequestHandler):
                     if not cfg:raise ValueError('Configure the board first.')
                     old=get(db,'webhook')
                     if old:return self.send({'ok':True,'alreadyRegistered':True})
-                    r=trello('webhooks',{'idModel':cfg['board'],'callbackURL':ORIGIN+'/webhook','description':'Student time tracker'},'POST');put(db,'webhook',{'id':r['id']});return self.send({'ok':True})
+                    r=trello('webhooks',{'idModel':cfg['board'],'callbackURL':ORIGIN+'/webhook','description':'ACETime student time tracker'},'POST');put(db,'webhook',{'id':r['id']});return self.send({'ok':True})
                 if self.path=='/api/sync':
                     if not admin:return self.send({'error':'Instructor sync required'},403)
                     sync(db);return self.send({'ok':True})
