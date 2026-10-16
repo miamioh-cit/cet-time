@@ -1,0 +1,42 @@
+{
+  "apiVersion": "networking.k8s.io/v1",
+  "kind": "Ingress",
+  "metadata": {
+    "name": "cet-time",
+    "namespace": "cet-time",
+    "labels": {
+      "app.kubernetes.io/name": "cet-time"
+    }
+  },
+  "spec": {
+    "rules": [
+      {
+        "host": "time.example.edu",
+        "http": {
+          "paths": [
+            {
+              "path": "/",
+              "pathType": "Prefix",
+              "backend": {
+                "service": {
+                  "name": "cet-time",
+                  "port": {
+                    "number": 80
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "tls": [
+      {
+        "hosts": [
+          "time.example.edu"
+        ],
+        "secretName": "REPLACE"
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "cet-time-config",
+    "namespace": "cet-time",
+    "labels": {
+      "app.kubernetes.io/name": "cet-time"
+    }
+  },
+  "data": {
+    "PUBLIC_URL": "https://time.example.edu",
+    "TIMEZONE": "America/New_York",
+    "DATABASE_PATH": "/app/data/tracker.db",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONUNBUFFERED": "1"
+  }
+}
