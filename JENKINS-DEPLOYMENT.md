@@ -75,8 +75,6 @@ After fetching the updated Jenkinsfile, use **Build with Parameters**:
 | `REGISTRY_CREDENTIAL_ID` | `roseaw-dockerhub` |
 | `KUBECONFIG_CREDENTIAL_ID` | `cet-time` |
 | `KUBE_NAMESPACE` | Existing namespace; default `cet-time` |
-| `PUBLIC_URL` | `http://10.48.229.63:8080`; exact lowercase HTTP browser origin, no path, query, or fragment |
-| `ENABLE_INGRESS` | **false** for this MetalLB setup; true only for a DNS hostname on port 80 through an ingress controller |
 | `INGRESS_CLASS` | Your controller's class, or blank for its default |
 | `NFS_SERVER` | `10.48.228.25` |
 | `NFS_PATH` | `/srv/nfs/roseaw` |
@@ -85,13 +83,13 @@ After fetching the updated Jenkinsfile, use **Build with Parameters**:
 | `STORAGE_SIZE` | `5Gi`; capacity declaration, not an NFS server quota |
 | `IMAGE_PULL_SECRET` | Existing namespace Secret if the image is private |
 
-`ALLOW_HTTP`, `TLS_SECRET_NAME`, and `STORAGE_CLASS` are retired job parameters for this configuration. HTTP is set directly, no TLS section is generated, and the static PV/PVC both have empty storageClassName. If Jenkins retains old parameter values, refresh the job from SCM; retired HTTP/TLS/storage-class values are ignored. HTTPS PUBLIC_URL values are rejected. Existing job values for image repository/credential can also persist; set them explicitly to the values above if necessary.
+`PUBLIC_URL`, `ENABLE_INGRESS`, `ALLOW_HTTP`, `TLS_SECRET_NAME`, and `STORAGE_CLASS` are retired job parameters for this configuration. The Jenkinsfile environment fixes PUBLIC_URL to `http://10.48.229.63:8080` and ENABLE_INGRESS to `false`, overriding stale build-parameter environment values. HTTP is set directly, no TLS section is generated, and the static PV/PVC both have empty storageClassName. If Jenkins retains old parameter values, refresh the job from SCM; retired HTTP/TLS/storage-class values are ignored. HTTPS PUBLIC_URL values are rejected. Existing job values for image repository/credential can also persist; set them explicitly to the values above if necessary.
 
 The manifests do not install an ingress controller, configure DNS, or override an ingress controller's global HTTPS redirect. If a controller forces HTTPS, configure its HTTP route for this pilot. The included Ingress routes all paths, including `/webhook`, to the app. If using your own proxy, route it to `cet-time.cet-time.svc.cluster.local:80` (adjust namespace if needed). Disabling an already deployed Ingress omits it from future apply operations but does not delete it automatically.
 
 ### Existing MetalLB LoadBalancer
 
-Keep `PUBLIC_URL=http://10.48.229.63:8080` and `ENABLE_INGRESS=false` in **Build with Parameters**, including after refreshing the job from SCM. Jenkins can retain previously saved parameter values even when Jenkinsfile defaults change. Each deployment writes this origin to `cet-time-config` and rolls out a new pod; a temporary ConfigMap patch is no longer required.
+The Jenkinsfile environment sets `PUBLIC_URL=http://10.48.229.63:8080` and `ENABLE_INGRESS=false` on every build. These are repository settings, not build parameters, so stale saved Jenkins values cannot restore the old origin. To change the public address later, edit those two settings in the Jenkinsfile. Each deployment writes the origin to `cet-time-config` and rolls out a new pod; a temporary ConfigMap patch is no longer required.
 
 The existing `cet-time/loadbalancer` Service must retain IP `10.48.229.63`, TCP port `8080`, target port `http`, and selector `app.kubernetes.io/name=cet-time`. MetalLB's address pool and L2 advertisement remain in its installation namespace (`default`). Jenkins continues managing the separate internal `cet-time` ClusterIP Service; it does not replace or delete the existing LoadBalancer or install MetalLB.
 

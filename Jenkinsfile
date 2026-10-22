@@ -12,8 +12,6 @@ pipeline {
         string(name: 'REGISTRY_CREDENTIAL_ID', defaultValue: 'roseaw-dockerhub', description: 'Jenkins Username with password credential for registry push')
         string(name: 'KUBECONFIG_CREDENTIAL_ID', defaultValue: 'cet-time', description: 'Jenkins Secret file credential containing kubeconfig')
         string(name: 'KUBE_NAMESPACE', defaultValue: 'cet-time', description: 'Existing Kubernetes namespace')
-        string(name: 'PUBLIC_URL', defaultValue: 'http://10.48.229.63:8080', description: 'Exact HTTP browser origin, including a non-default port for direct LoadBalancer access')
-        booleanParam(name: 'ENABLE_INGRESS', defaultValue: false, description: 'Enable only for a DNS hostname on port 80; leave disabled for the existing MetalLB LoadBalancer')
         string(name: 'INGRESS_CLASS', defaultValue: '', description: 'Ingress class; blank uses cluster default')
         string(name: 'NFS_SERVER', defaultValue: '10.48.228.25', description: 'NFS server for ACETime persistent storage')
         string(name: 'NFS_PATH', defaultValue: '/srv/nfs/roseaw', description: 'NFS export; app data is isolated in its cet-time subdirectory')
@@ -25,6 +23,9 @@ pipeline {
     environment {
         PYTHONDONTWRITEBYTECODE = '1'
         ALLOW_HTTP = 'true'
+        // Repository settings override any stale Jenkins build parameters.
+        PUBLIC_URL = 'http://10.48.229.63:8080'
+        ENABLE_INGRESS = 'false'
     }
     stages {
         stage('Checkout') {
@@ -95,7 +96,7 @@ pipeline {
         }
     }
     post {
-        success { echo "Deployed cet-time to ${params.KUBE_NAMESPACE}. Open ${params.PUBLIC_URL} to configure the Trello board." }
+        success { echo "Deployed cet-time to ${params.KUBE_NAMESPACE}. Open ${env.PUBLIC_URL} to configure the Trello board." }
         failure { echo 'Build/deployment failed. Check the failed stage. Existing time data is retained on cet-time-data; no automatic rollback or PVC deletion is performed.' }
         always {
             archiveArtifacts artifacts: '.deployment.json,.image-digest', allowEmptyArchive: true
