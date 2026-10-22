@@ -7,9 +7,9 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '20'))
     }
     parameters {
-        string(name: 'IMAGE_REPOSITORY', defaultValue: '', description: 'Full repository without tag, e.g. docker.io/YOUR_ORG/cet-time')
+        string(name: 'IMAGE_REPOSITORY', defaultValue: 'docker.io/cithit/cet-time', description: 'Full Docker Hub repository without tag')
         string(name: 'REGISTRY_HOST', defaultValue: 'docker.io', description: 'Registry login host, matching IMAGE_REPOSITORY')
-        string(name: 'REGISTRY_CREDENTIAL_ID', defaultValue: '', description: 'Jenkins Username with password credential for registry push')
+        string(name: 'REGISTRY_CREDENTIAL_ID', defaultValue: 'roseaw-dockerhub', description: 'Jenkins Username with password credential for registry push')
         string(name: 'KUBECONFIG_CREDENTIAL_ID', defaultValue: 'cet-time', description: 'Jenkins Secret file credential containing kubeconfig')
         string(name: 'KUBE_NAMESPACE', defaultValue: 'cet-time', description: 'Existing Kubernetes namespace')
         string(name: 'PUBLIC_URL', defaultValue: '', description: 'Exact app origin, e.g. https://time.example.edu; HTTP requires ALLOW_HTTP')

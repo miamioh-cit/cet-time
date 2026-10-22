@@ -9,7 +9,7 @@ Create these credentials in the Jenkins folder containing the pipeline job:
 | Credential ID | Jenkins kind | Value |
 | --- | --- | --- |
 | `cet-time` | Secret file | Kubeconfig for the target cluster and namespace |
-| Your registry credential ID | Username with password | Registry username and password/access token with push access |
+| `roseaw-dockerhub` | Username with password | Docker Hub username and password/access token with push access to `cithit/cet-time` |
 | `cet-time-admin-password` | Secret text | Initial instructor password, at least 12 characters |
 | `cet-time-trello-key` | Secret text | Trello application API key |
 | `cet-time-trello-token` | Secret text | Trello token with board access and webhook registration permission |
@@ -46,9 +46,9 @@ Use a **block-backed storage class** for SQLite (such as your cluster's vSphere 
 
 | Job parameter | Set to |
 | --- | --- |
-| `IMAGE_REPOSITORY` | Full repository, e.g. `docker.io/YOUR_ORG/cet-time`, lowercase, no tag |
+| `IMAGE_REPOSITORY` | `docker.io/cithit/cet-time` (configured default); lowercase, no tag |
 | `REGISTRY_HOST` | `docker.io`, or your matching private registry host |
-| `REGISTRY_CREDENTIAL_ID` | Your Jenkins registry username/password credential ID |
+| `REGISTRY_CREDENTIAL_ID` | `roseaw-dockerhub` (configured default) |
 | `KUBECONFIG_CREDENTIAL_ID` | `cet-time` (already the default) |
 | `KUBE_NAMESPACE` | `cet-time`, or your already-created target namespace |
 | `PUBLIC_URL` | Exact external origin, e.g. `https://time.example.edu`; no path or port. An HTTP pilot uses `http://time.example.edu` plus `ALLOW_HTTP=true`. |
@@ -116,3 +116,5 @@ HTTP logins and task data are unencrypted. Restrict this pilot to a trusted inte
 The app allows signed HTTP webhook callbacks only when `ALLOW_HTTP=true`. Trello must be able to reach the callback and receive HTTP 200 for its HEAD validation; a private internal hostname/IP is not reachable from Trello Cloud. For a private pilot use the instructor's **Refresh & sync** to import card-movement history. Live automatic updates require a reachable callback route. Trello documents HTTP callbacks here: https://developer.atlassian.com/cloud/trello/guides/rest-api/webhooks/ . There is no automatic background Trello polling in this version.
 
 When a trusted certificate is available, change `PUBLIC_URL` to HTTPS, set `TLS_SECRET_NAME` for the Ingress, turn off `ALLOW_HTTP`, and rebuild. Reconfigure any previously registered webhook for the new callback URL; changing the web address does not update it automatically.
+
+Docker Hub is the registry host (`docker.io`); `cithit` is the image namespace. Jenkins uses `roseaw-dockerhub` to authenticate, so the login username need not match the namespace as long as it has push access there. Existing Jenkins job parameters may retain old values after an SCM update: if needed, set `IMAGE_REPOSITORY=docker.io/cithit/cet-time` and `REGISTRY_CREDENTIAL_ID=roseaw-dockerhub` explicitly in Build with Parameters.
