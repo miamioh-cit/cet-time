@@ -1,5 +1,5 @@
 {
-  "IMAGE_REPOSITORY": "",
+  "IMAGE_REPOSITORY": "docker.io/evankunkel/cet-time",
   "REGISTRY_HOST": "docker.io",
   "REGISTRY_CREDENTIAL_ID": "docker-registry",
   "KUBECONFIG_CREDENTIAL_ID": "cet-time",
