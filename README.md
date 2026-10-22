@@ -73,3 +73,9 @@ The sample preview includes **Show a near-4-hour example** on the Break reminder
 ## Current deployment defaults
 
 The Jenkins/Kubernetes path is HTTP-only for now. It uses NFS server `10.48.228.25`, export `/srv/nfs/roseaw`, a dedicated `cet-time` subdirectory, and a static Retain PV. No TLS Secret is required. Prepare the server-side directory before deployment and keep one application replica. Run the included `storage_check.py` on the mounted export before using student records; local tests cannot certify NFS locking/fsync reliability.
+## Copy a weekly email report
+
+Open **Student Workspace → Email report**, choose a Monday week start, and generate the email. Instructor accounts get a section for every registered student login (using its display name and linked Trello member); student accounts can generate only their own report. All students are included even when they have no verified hours. Create the student accounts in Connections if a student is missing.
+
+The report uses the same calculations as Weekly report and defaults to verified hours. Include unverified time only when wanted; estimates are labeled. Edit the subject, greeting, or closing, then use **Copy subject** and **Copy email body** to paste into Gmail. On HTTP, copying falls back to selecting the text for Ctrl+C/Command+C if browser clipboard access is unavailable. Nothing is sent automatically, and no Gmail credentials or Google integration are needed.
+

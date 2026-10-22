@@ -85,4 +85,38 @@ class ApiTests(unittest.TestCase):
         with patch.dict(os.environ,{'ALLOW_HTTP':'true'}),patch.object(self.s,'trello',return_value={'id':'test-hook'}) as trello:
             self.assertEqual(self.request('/api/webhook',{},admin)[0],200)
             self.assertEqual(trello.call_args.args[1]['callbackURL'],self.origin+'/webhook')
+    def test_08_combined_email_matches_each_weekly_report(self):
+        from unittest.mock import patch
+        from datetime import timedelta
+        start=datetime(2026,10,19,tzinfo=self.s.TZ).timestamp()
+        cards=[{'id':'email-card','name':'Email report task','idList':'done','idMembers':['alice','bob']}]
+        sessions=[{'id':'email-alice','card':'email-card','member':'alice','start':start+100,'end':start+3700},{'id':'email-bob','card':'email-card','member':'bob','start':start+100,'end':start+1900}]
+        admin=self.login('admin')
+        with self.s.connect() as db:
+            db.execute('INSERT INTO confirmations VALUES(?,?,?,?,?,?)',('email-alice',1800,'alice','alice','Test adjustment',time.time()))
+            db.execute('INSERT INTO users VALUES(?,?,?,?,0)',('email-third','Brendan James','unused-test-hash','third'))
+        try:
+            with patch.object(self.s,'state',return_value=(cards,sessions)):
+                status,result,_=self.request('/api/email-report',{'week':'2026-10-19'},admin)
+                self.assertEqual(status,200);self.assertEqual(result['weekEnd'],'2026-10-25')
+                self.assertEqual({s['member'] for s in result['students']},{'alice','bob','third'})
+                self.assertNotIn('Instructor',[s['name'] for s in result['students']])
+                for s in result['students']:
+                    status,weekly,_=self.request('/api/report',{'week':'2026-10-19','member':s['member']},admin)
+                    self.assertEqual(status,200);self.assertEqual(s['rows'],weekly['rows']);self.assertEqual(s['total'],weekly['total'])
+                self.assertEqual(sum(s['total'] for s in result['students']),0.5)
+                self.assertEqual(next(s for s in result['students'] if s['member']=='third')['rows'],[])
+                _,pending,_=self.request('/api/email-report',{'week':'2026-10-19','includePending':True},admin)
+                self.assertTrue(pending['includePending']);self.assertEqual(sum(s['total'] for s in pending['students']),1)
+                self.assertFalse(next(s for s in pending['students'] if s['member']=='bob')['rows'][0]['verified'])
+        finally:
+            with self.s.connect() as db:
+                db.execute('DELETE FROM confirmations WHERE session=?',('email-alice',));db.execute('DELETE FROM users WHERE id=?',('email-third',))
+    def test_09_email_report_preserves_student_privacy_and_authentication(self):
+        self.assertEqual(self.request('/api/email-report',{'week':'2026-10-19'})[0],401)
+        cookie=self.login('alice')
+        status,result,_=self.request('/api/email-report',{'week':'2026-10-19','member':'bob','allStudents':True},cookie)
+        self.assertEqual(status,200);self.assertEqual([s['member'] for s in result['students']],['alice'])
+        self.assertEqual(self.request('/api/email-report',{'week':'2026-10-19'},cookie,False)[0],403)
+        self.assertEqual(self.request('/api/email-report',{'week':'2026-10-20'},cookie)[0],400)
 if __name__=='__main__':unittest.main()

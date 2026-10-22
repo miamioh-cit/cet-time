@@ -88,6 +88,19 @@ def sync(db):
 def break_settings(db):
     return get(db,'break_settings',{'defaultHours':4.0,'overrides':{}})
 
+def report_week(week):
+    start=datetime.strptime(week,'%Y-%m-%d').replace(tzinfo=TZ)
+    if start.weekday()!=0:raise ValueError('Choose a Monday for week start.')
+    return start,start+timedelta(days=7)
+
+def weekly_report(db,sessions,cardmap,member,start,end,include_pending,now):
+    cf={r['session']:r['seconds'] for r in db.execute('SELECT * FROM confirmations WHERE member=?',(member,))}
+    rows=summarize(sessions,cf,cardmap,member,start.timestamp(),end.timestamp(),now,not include_pending)
+    cfg=get(db,'config',{}).get('lists',{})
+    labels={cfg.get('active'):'In process',cfg.get('blocked'):'Blocked',cfg.get('done'):'Completed',cfg.get('backlog'):'Backlog'}
+    for r in rows:r['progress']=labels.get(r.pop('list'),'Other')+(' — verified' if r['verified'] else ' — unverified')
+    return {'rows':rows,'total':sum(r['seconds'] for r in rows)/3600,'timezone':str(TZ)}
+
 def reminders(db,sessions,user):
     settings=break_settings(db)
     mids={s['member'] for s in sessions} | {m['id'] for m in get(db,'members',[])} if user['admin'] else {user['member']}
@@ -112,7 +125,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.send_response(200 if self.path=='/webhook' else 404);self.end_headers()
     def do_GET(self):
-        if self.path in ('/','/app.js','/break-reminders.js','/style.css'):
+        if self.path in ('/','/app.js','/break-reminders.js','/email-report.js','/style.css'):
             path=ROOT/'static'/({'/':'index.html'}.get(self.path,self.path[1:]))
             raw=path.read_bytes();self.send_response(200)
             self.send_header('Content-Type',{'html':'text/html; charset=utf-8','js':'text/javascript','css':'text/css'}[path.suffix[1:]])
@@ -224,15 +237,17 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send({'user':{'name':user['name'],'admin':admin,'member':user['member']},'config':get(db,'config'),'members':get(db,'members',[]) if admin else [],'cards':cards,'sessions':sessions,'confirmations':{s['id']:cf[s['id']] for s in sessions if s['id'] in cf},'breakReminders':reminders(db,sessions,user),'breakSettings':break_settings(db) if admin else None,'lastSync':get(db,'last_sync'),'webhook':bool(get(db,'webhook')),'timezone':str(TZ)})
                 if self.path=='/api/report':
                     if not member:raise ValueError('Select a student.')
-                    start=datetime.strptime(data['week'],'%Y-%m-%d').replace(tzinfo=TZ)
-                    if start.weekday()!=0:raise ValueError('Choose a Monday for week start.')
-                    end=start+timedelta(days=7)
-                    cf={r['session']:r['seconds'] for r in db.execute('SELECT * FROM confirmations WHERE member=?',(member,))}
-                    rows=summarize(sessions,cf,cardmap,member,start.timestamp(),end.timestamp(),time.time(),not data.get('includePending',False))
-                    cfg=get(db,'config',{}).get('lists',{})
-                    labels={cfg.get('active'):'In process',cfg.get('blocked'):'Blocked',cfg.get('done'):'Completed',cfg.get('backlog'):'Backlog'}
-                    for r in rows:r['progress']=labels.get(r.pop('list'),'Other')+(' — verified' if r['verified'] else ' — unverified')
-                    return self.send({'rows':rows,'total':sum(r['seconds'] for r in rows)/3600,'timezone':str(TZ)})
+                    start,end=report_week(data['week'])
+                    return self.send(weekly_report(db,sessions,cardmap,member,start,end,bool(data.get('includePending',False)),time.time()))
+                if self.path=='/api/email-report':
+                    start,end=report_week(data['week']);include_pending=bool(data.get('includePending',False));now=time.time()
+                    if admin:
+                        students=db.execute('SELECT name,member FROM users WHERE admin=0 AND member IS NOT NULL ORDER BY name COLLATE NOCASE,id').fetchall()
+                    else:
+                        if not user['member']:raise ValueError('Student account must be linked to a Trello member.')
+                        students=[user]
+                    reports=[{'name':s['name'],'member':s['member'],**weekly_report(db,sessions,cardmap,s['member'],start,end,include_pending,now)} for s in students]
+                    return self.send({'week':start.strftime('%Y-%m-%d'),'weekEnd':(end-timedelta(days=1)).strftime('%Y-%m-%d'),'timezone':str(TZ),'includePending':include_pending,'students':reports,'lastSync':get(db,'last_sync')})
                 self.send({'error':'Not found'},404)
         except (ValueError,KeyError,TypeError,json.JSONDecodeError) as e:self.send({'error':str(e)},400)
         except Exception:self.send({'error':'Server error. Check configuration and retry.'},500)
