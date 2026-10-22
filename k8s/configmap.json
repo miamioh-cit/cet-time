@@ -9,10 +9,11 @@
     }
   },
   "data": {
-    "PUBLIC_URL": "https://time.example.edu",
+    "PUBLIC_URL": "http://time.example.edu",
     "TIMEZONE": "America/New_York",
     "DATABASE_PATH": "/app/data/tracker.db",
     "PYTHONDONTWRITEBYTECODE": "1",
-    "PYTHONUNBUFFERED": "1"
+    "PYTHONUNBUFFERED": "1",
+    "ALLOW_HTTP": "true"
   }
 }

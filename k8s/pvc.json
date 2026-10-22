@@ -10,12 +10,14 @@
   },
   "spec": {
     "accessModes": [
-      "ReadWriteOnce"
+      "ReadWriteMany"
     ],
     "resources": {
       "requests": {
         "storage": "5Gi"
       }
-    }
+    },
+    "storageClassName": "",
+    "volumeName": "cet-time-nfs-pv"
   }
 }

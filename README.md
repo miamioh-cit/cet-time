@@ -19,7 +19,7 @@ Map your actual list IDs during setup; the Completed list can have a different n
 
 ## Jenkins and Kubernetes
 
-Use the included `Jenkinsfile` and [JENKINS-DEPLOYMENT.md](JENKINS-DEPLOYMENT.md) to build and deploy with the Jenkins kubeconfig credential `cet-time`. The deployment includes persistent storage, HTTPS ingress configuration, health probes, and Jenkins-managed application secrets. Set your image repository and public URL as job parameters.
+Use the included `Jenkinsfile` and [JENKINS-DEPLOYMENT.md](JENKINS-DEPLOYMENT.md) to build and deploy with the Jenkins kubeconfig credential `cet-time`. The deployment includes persistent storage, HTTP ingress configuration, health probes, and Jenkins-managed application secrets. The pipeline defaults to `docker.io/cithit/cet-time`, credential `roseaw-dockerhub`, and the supplied NFS export. Set the HTTP public URL as a job parameter.
 
 ## Run locally with Docker Compose
 
@@ -44,7 +44,7 @@ The clipboard contains tabs between the three columns, with no header. Total hou
 
 ## Persistence and recovery
 
-SQLite stores baseline cards, immutable raw action payloads, credentials as hashes, expiring sessions, confirmations, and an audit table. Keep the Docker volume. Back up the database using SQLite's online backup API or stop the container before copying the database. Credentials are server-only environment variables. HTTPS sets secure session cookies; sessions expire after 12 hours. Login attempts are limited per account. Use one application instance with one persistent local SQLite volume; do not share a database over NFS or use multiple replicas. This implementation is not an SSO or multi-institution service.
+SQLite stores baseline cards, immutable raw action payloads, credentials as hashes, expiring sessions, confirmations, and an audit table. Keep the Docker volume. Back up the database using SQLite's online backup API or stop the container before copying the database. Credentials are server-only environment variables. HTTPS sets secure session cookies; sessions expire after 12 hours. Login attempts are limited per account. The Kubernetes deployment uses the supplied NFS export, one app replica, serialized in-process database access, SQLite DELETE rollback journaling, and synchronous FULL. NFS must supply reliable locking and synchronization; do not run other applications, replicas, or external tools against the live database. See JENKINS-DEPLOYMENT.md for NFS preparation and the storage probe. This implementation is not an SSO or multi-institution service.
 
 Mapping is locked after activation to preserve historical interpretation. For another board or changed list IDs, use a new database. If a late event changes a previously confirmed interval, its confirmation no longer matches and the affected interval must be verified again. Do an instructor history sync before preparing final weekly reports, especially after downtime. Current board names reflect the stored baseline plus captured rename actions. Trello access revocation or missed webhooks can make the view stale; the displayed refresh time alone is not a delivery guarantee.
 
@@ -69,3 +69,7 @@ A break clock measures a student's current continuous working streak across thei
 Every signed-in student receives an in-app reminder on any screen. **Enable browser notifications** requests permission for an optional desktop alert to that student; instructors viewing student clocks do not receive the student's desktop alerts. The app checks reminders every 30 seconds; browser background throttling, operating-system notification settings, or network failures can delay alerts. ACETime must remain open and signed in. No closed-browser push, email, Slack, or Trello messages are sent. This is a configurable work reminder, not a payroll or break-compliance system.
 
 The sample preview includes **Show a near-4-hour example** on the Break reminders screen so you can try reminders without waiting four hours.
+
+## Current deployment defaults
+
+The Jenkins/Kubernetes path is HTTP-only for now. It uses NFS server `10.48.228.25`, export `/srv/nfs/roseaw`, a dedicated `cet-time` subdirectory, and a static Retain PV. No TLS Secret is required. Prepare the server-side directory before deployment and keep one application replica. Run the included `storage_check.py` on the mounted export before using student records; local tests cannot certify NFS locking/fsync reliability.

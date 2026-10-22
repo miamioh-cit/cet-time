@@ -1,4 +1,4 @@
-import os,json,sqlite3,time,secrets,hashlib,hmac,base64,urllib.request,urllib.parse,urllib.error
+import os,json,sqlite3,time,secrets,hashlib,hmac,base64,threading,urllib.request,urllib.parse,urllib.error
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.cookies import SimpleCookie
 from datetime import datetime,timedelta
@@ -9,14 +9,32 @@ ROOT=Path(__file__).parent
 DB=os.getenv('DATABASE_PATH','data/tracker.db'); Path(DB).parent.mkdir(parents=True,exist_ok=True)
 ORIGIN=os.getenv('PUBLIC_URL','http://localhost:8080').rstrip('/')
 TZ=ZoneInfo(os.getenv('TIMEZONE','America/New_York'))
+DB_LOCK=threading.RLock()
+class DatabaseConnection(sqlite3.Connection):
+    def __enter__(self):
+        DB_LOCK.acquire()
+        try:
+            super().__enter__()
+            self.execute('PRAGMA synchronous=FULL')
+            return self
+        except BaseException:
+            self.close();DB_LOCK.release();raise
+    def __exit__(self,*args):
+        try:return super().__exit__(*args)
+        finally:
+            try:self.close()
+            finally:DB_LOCK.release()
 def connect():
-    db=sqlite3.connect(DB,timeout=30); db.row_factory=sqlite3.Row; return db
+    # One process serializes all app DB access; NFS must still provide reliable locks/fsync.
+    db=sqlite3.connect(DB,timeout=30,factory=DatabaseConnection);db.row_factory=sqlite3.Row;return db
 def password(p,salt=None):
     salt=salt or secrets.token_hex(16)
     return salt+':'+hashlib.pbkdf2_hmac('sha256',p.encode(),salt.encode(),310000).hex()
 def valid_password(p,stored): return hmac.compare_digest(password(p,stored.split(':')[0]),stored)
 def init():
     with connect() as db:
+        mode=db.execute('PRAGMA journal_mode=DELETE').fetchone()[0]
+        if mode.lower()!='delete':raise RuntimeError('SQLite rollback journal mode DELETE is required for this NFS deployment.')
         db.executescript('''CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY,value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,name TEXT NOT NULL,password TEXT NOT NULL,member TEXT,admin INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS logins(token TEXT PRIMARY KEY,user TEXT NOT NULL,expires REAL NOT NULL);

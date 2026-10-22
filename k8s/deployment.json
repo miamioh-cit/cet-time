@@ -31,8 +31,6 @@
           "runAsNonRoot": true,
           "runAsUser": 10001,
           "runAsGroup": 10001,
-          "fsGroup": 10001,
-          "fsGroupChangePolicy": "OnRootMismatch",
           "seccompProfile": {
             "type": "RuntimeDefault"
           }
@@ -82,7 +80,8 @@
             "volumeMounts": [
               {
                 "name": "data",
-                "mountPath": "/app/data"
+                "mountPath": "/app/data",
+                "subPath": "cet-time"
               }
             ],
             "startupProbe": {

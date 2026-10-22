@@ -3,23 +3,28 @@ from deploy.render import render
 from deploy.apply_secret import payload
 class DeploymentTests(unittest.TestCase):
     def setUp(self):
-        self.e={'IMAGE_REPOSITORY':'docker.io/example/cet-time','REGISTRY_HOST':'docker.io','IMAGE_REF':'docker.io/example/cet-time@sha256:'+'a'*64,'PUBLIC_URL':'https://time.example.edu','TLS_SECRET_NAME':'time-tls','BUILD_TAG':'jenkins-cet-time-10'}
+        self.e={'IMAGE_REPOSITORY':'docker.io/example/cet-time','REGISTRY_HOST':'docker.io','IMAGE_REF':'docker.io/example/cet-time@sha256:'+'a'*64,'PUBLIC_URL':'http://time.example.edu','BUILD_TAG':'jenkins-cet-time-10'}
     def test_storage_identity_and_single_replica(self):
         items={x['kind']:x for x in render(self.e)['items']};d=items['Deployment'];pod=d['spec']['template']['spec']
         self.assertEqual(d['spec']['replicas'],1);self.assertEqual(d['spec']['strategy']['type'],'Recreate')
-        self.assertEqual(pod['securityContext']['runAsUser'],10001);self.assertEqual(pod['securityContext']['fsGroup'],10001)
+        self.assertEqual(pod['securityContext']['runAsUser'],10001);self.assertNotIn('fsGroup',pod['securityContext'])
+        self.assertEqual(pod['containers'][0]['volumeMounts'][0]['subPath'],'cet-time')
         self.assertEqual(pod['volumes'][0]['persistentVolumeClaim']['claimName'],'cet-time-data')
-        self.assertEqual(pod['containers'][0]['image'],self.e['IMAGE_REF']);self.assertEqual(items['PersistentVolumeClaim']['spec']['accessModes'],['ReadWriteOnce'])
-        self.assertNotIn('storageClassName',items['PersistentVolumeClaim']['spec'])
-        self.assertEqual(items['Ingress']['spec']['tls'][0]['secretName'],'time-tls')
+        self.assertEqual(pod['containers'][0]['image'],self.e['IMAGE_REF']);self.assertEqual(items['PersistentVolumeClaim']['spec']['accessModes'],['ReadWriteMany'])
+        self.assertEqual(items['PersistentVolumeClaim']['spec']['storageClassName'],'')
+        self.assertNotIn('tls',items['Ingress']['spec'])
+        pv=items['PersistentVolume'];self.assertEqual(pv['spec']['persistentVolumeReclaimPolicy'],'Retain')
+        self.assertEqual(pv['spec']['nfs'],{'server':'10.48.228.25','path':'/srv/nfs/roseaw'})
+        self.assertEqual(items['ConfigMap']['data']['DATABASE_PATH'],'/app/data/tracker.db')
     def test_alternate_namespace_and_external_proxy(self):
-        self.e.update(KUBE_NAMESPACE='student-work',ENABLE_INGRESS='false',STORAGE_CLASS='vsphere-block',IMAGE_PULL_SECRET='registry-pull')
+        self.e.update(KUBE_NAMESPACE='student-work',ENABLE_INGRESS='false',MANAGE_NFS_PV='false',IMAGE_PULL_SECRET='registry-pull')
         items=render(self.e)['items'];self.assertNotIn('Ingress',[i['kind'] for i in items])
         self.assertTrue(all(i['metadata']['namespace']=='student-work' for i in items))
-        self.assertEqual(items[0]['spec']['storageClassName'],'vsphere-block')
+        self.assertNotIn('PersistentVolume',[i['kind'] for i in items])
+        self.assertEqual(items[0]['spec']['volumeName'],'cet-time-nfs-pv')
         self.assertEqual(items[2]['spec']['template']['spec']['imagePullSecrets'],[{'name':'registry-pull'}])
     def test_reject_bad_origin_or_unrelated_image(self):
-        for k,v in [('PUBLIC_URL','http://time.example.edu'),('PUBLIC_URL','https://time.example.edu/path'),('PUBLIC_URL','https://USER:SECRET@time.example.edu'),('IMAGE_REF','evil/repo:latest'),('KUBE_NAMESPACE','bad; echo secret'),('TLS_SECRET_NAME','')]:
+        for k,v in [('PUBLIC_URL','https://time.example.edu'),('PUBLIC_URL','https://time.example.edu/path'),('PUBLIC_URL','https://USER:SECRET@time.example.edu'),('IMAGE_REF','evil/repo:latest'),('KUBE_NAMESPACE','bad; echo secret'),('NFS_PV_NAME','bad name')]:
             e=dict(self.e);e[k]=v
             with self.subTest(k=k,v=v),self.assertRaises(ValueError):render(e)
     def test_secrets_do_not_enter_manifests(self):
@@ -36,25 +41,24 @@ class DeploymentTests(unittest.TestCase):
         with patch.dict(os.environ,self.e),patch('subprocess.run',return_value=inspect),contextlib.redirect_stdout(out):
             runpy.run_path('deploy/resolve_digest.py',run_name='__main__')
         self.assertEqual(out.getvalue().strip(),'docker.io/example/cet-time@sha256:'+'b'*64)
-    def test_http_pilot_has_no_tls_and_requires_opt_in(self):
-        self.e.update(PUBLIC_URL='http://time.example.edu',TLS_SECRET_NAME='',ALLOW_HTTP='true')
+    def test_http_only_ignores_retired_tls_and_allow_parameters(self):
+        self.e.update(TLS_SECRET_NAME='retired-secret',ALLOW_HTTP='false')
         objects={i['kind']:i for i in render(self.e)['items']}
         self.assertNotIn('tls',objects['Ingress']['spec'])
-        self.assertEqual(objects['ConfigMap']['data']['PUBLIC_URL'],'http://time.example.edu')
         self.assertEqual(objects['ConfigMap']['data']['ALLOW_HTTP'],'true')
-        self.e['ALLOW_HTTP']='false'
+    def test_https_is_rejected_even_with_a_certificate(self):
+        self.e.update(PUBLIC_URL='https://time.example.edu',TLS_SECRET_NAME='old-cert')
         with self.assertRaises(ValueError):render(self.e)
-    def test_https_still_requires_certificate_with_http_opt_in(self):
-        self.e.update(ALLOW_HTTP='true',TLS_SECRET_NAME='')
-        with self.assertRaises(ValueError):render(self.e)
-    def test_http_external_proxy_and_invalid_modes(self):
-        self.e.update(PUBLIC_URL='http://time.example.edu',TLS_SECRET_NAME='',ALLOW_HTTP='true',ENABLE_INGRESS='false')
-        self.assertNotIn('Ingress',[i['kind'] for i in render(self.e)['items']])
-        self.e['ALLOW_HTTP']='maybe'
-        with self.assertRaises(ValueError):render(self.e)
-    def test_http_does_not_silently_ignore_tls_secret(self):
-        self.e.update(PUBLIC_URL='http://time.example.edu',ALLOW_HTTP='true')
-        with self.assertRaises(ValueError):render(self.e)
+    def test_static_nfs_claim_is_bound_to_namespace(self):
+        self.e.update(KUBE_NAMESPACE='another-namespace',NFS_PV_NAME='another-volume',NFS_SERVER='10.48.228.25',NFS_PATH='/srv/nfs/roseaw',MANAGE_NFS_PV='true')
+        objects={i['kind']:i for i in render(self.e)['items']}
+        self.assertEqual(objects['PersistentVolume']['metadata']['name'],'another-volume')
+        self.assertEqual(objects['PersistentVolume']['spec']['claimRef'],{'namespace':'another-namespace','name':'cet-time-data'})
+        self.assertNotIn('namespace',objects['PersistentVolume']['metadata'])
+        self.assertEqual(objects['PersistentVolumeClaim']['spec']['volumeName'],'another-volume')
+    def test_rejects_invalid_nfs_configuration(self):
+        for key,value in [('NFS_SERVER','bad/server'),('NFS_PATH','relative/export'),('MANAGE_NFS_PV','maybe')]:
+            with self.subTest(key=key),self.assertRaises(ValueError):render(dict(self.e,**{key:value}))
     def test_missing_secrets_fail(self):
         with self.assertRaises(ValueError):payload({})
 if __name__=='__main__':unittest.main()

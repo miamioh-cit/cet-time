@@ -29,14 +29,6 @@
           ]
         }
       }
-    ],
-    "tls": [
-      {
-        "hosts": [
-          "time.example.edu"
-        ],
-        "secretName": "REPLACE"
-      }
     ]
   }
 }

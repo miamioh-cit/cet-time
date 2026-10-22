@@ -12,17 +12,19 @@ pipeline {
         string(name: 'REGISTRY_CREDENTIAL_ID', defaultValue: 'roseaw-dockerhub', description: 'Jenkins Username with password credential for registry push')
         string(name: 'KUBECONFIG_CREDENTIAL_ID', defaultValue: 'cet-time', description: 'Jenkins Secret file credential containing kubeconfig')
         string(name: 'KUBE_NAMESPACE', defaultValue: 'cet-time', description: 'Existing Kubernetes namespace')
-        string(name: 'PUBLIC_URL', defaultValue: '', description: 'Exact app origin, e.g. https://time.example.edu; HTTP requires ALLOW_HTTP')
-        booleanParam(name: 'ALLOW_HTTP', defaultValue: false, description: 'Allow unencrypted HTTP for an internal pilot without a certificate; browser notifications require HTTPS')
+        string(name: 'PUBLIC_URL', defaultValue: '', description: 'HTTP-only app origin, e.g. http://time.example.edu')
         booleanParam(name: 'ENABLE_INGRESS', defaultValue: true, description: 'Create an Ingress for PUBLIC_URL; otherwise use your existing reverse proxy')
         string(name: 'INGRESS_CLASS', defaultValue: '', description: 'Ingress class; blank uses cluster default')
-        string(name: 'TLS_SECRET_NAME', defaultValue: '', description: 'Existing TLS Secret in the namespace (required only for HTTPS Ingress)')
-        string(name: 'STORAGE_CLASS', defaultValue: '', description: 'Block-backed storage class; blank uses cluster default. Do not use NFS for SQLite.')
+        string(name: 'NFS_SERVER', defaultValue: '10.48.228.25', description: 'NFS server for ACETime persistent storage')
+        string(name: 'NFS_PATH', defaultValue: '/srv/nfs/roseaw', description: 'NFS export; app data is isolated in its cet-time subdirectory')
+        string(name: 'NFS_PV_NAME', defaultValue: 'cet-time-nfs-pv', description: 'Dedicated static NFS PersistentVolume name')
+        booleanParam(name: 'MANAGE_NFS_PV', defaultValue: true, description: 'Apply the cluster-scoped NFS PV; requires PV permissions. Uncheck if an administrator pre-created it.')
         string(name: 'STORAGE_SIZE', defaultValue: '5Gi', description: 'PVC request at initial creation; do not shrink existing claims')
         string(name: 'IMAGE_PULL_SECRET', defaultValue: '', description: 'Existing registry pull Secret in namespace, if needed')
     }
     environment {
         PYTHONDONTWRITEBYTECODE = '1'
+        ALLOW_HTTP = 'true'
     }
     stages {
         stage('Checkout') {
