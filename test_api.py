@@ -77,4 +77,12 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.request('/api/break-settings',{'hours':2,'member':'not-on-board'},admin)[0],400)
         self.assertEqual(self.request('/api/break-settings',{'member':'alice','reset':True},admin)[0],200)
         _,s,_=self.request('/api/state',{},admin);self.assertEqual(s['breakSettings']['overrides'],{})
+    def test_07_http_webhook_registration_requires_explicit_opt_in(self):
+        from unittest.mock import patch
+        admin=self.login('admin')
+        with patch.dict(os.environ,{'ALLOW_HTTP':'false'}):
+            self.assertEqual(self.request('/api/webhook',{},admin)[0],400)
+        with patch.dict(os.environ,{'ALLOW_HTTP':'true'}),patch.object(self.s,'trello',return_value={'id':'test-hook'}) as trello:
+            self.assertEqual(self.request('/api/webhook',{},admin)[0],200)
+            self.assertEqual(trello.call_args.args[1]['callbackURL'],self.origin+'/webhook')
 if __name__=='__main__':unittest.main()

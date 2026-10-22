@@ -51,10 +51,11 @@ Use a **block-backed storage class** for SQLite (such as your cluster's vSphere 
 | `REGISTRY_CREDENTIAL_ID` | Your Jenkins registry username/password credential ID |
 | `KUBECONFIG_CREDENTIAL_ID` | `cet-time` (already the default) |
 | `KUBE_NAMESPACE` | `cet-time`, or your already-created target namespace |
-| `PUBLIC_URL` | Exact external origin, e.g. `https://time.example.edu`; no path or port |
+| `PUBLIC_URL` | Exact external origin, e.g. `https://time.example.edu`; no path or port. An HTTP pilot uses `http://time.example.edu` plus `ALLOW_HTTP=true`. |
+| `ALLOW_HTTP` | false by default; true permits an internal HTTP pilot without a certificate |
 | `ENABLE_INGRESS` | true for the included Ingress; false when using your existing HTTPS reverse proxy |
 | `INGRESS_CLASS` | Your controller's class, or blank for the cluster default |
-| `TLS_SECRET_NAME` | Existing certificate Secret; required with the supplied Ingress |
+| `TLS_SECRET_NAME` | Existing certificate Secret for HTTPS Ingress; leave blank for an HTTP pilot |
 | `STORAGE_CLASS` | Your block-backed class, or blank if the cluster default is block-backed |
 | `STORAGE_SIZE` | `5Gi` initially; keep this and storage class stable on subsequent builds |
 | `IMAGE_PULL_SECRET` | Existing Kubernetes registry pull Secret, if the image is private |
@@ -97,3 +98,21 @@ Local validation covers application tests and deployment rendering. A live Docke
 ## Updating break reminders
 
 Run the pipeline to deploy the break-reminder feature. There are no new Jenkins credentials, environment variables, or migrations. As instructor, open **Break reminders** to change the four-hour default or add a student-specific override. Students enable optional browser notifications in their own signed-in sessions. Keep the app open for reminders; no external messaging service is configured.
+
+## Internal pilot without a certificate
+
+HTTPS remains the default. To test before you have a certificate, load the updated Jenkinsfile and use **Build with Parameters**:
+
+- `ALLOW_HTTP`: checked (true).
+- `PUBLIC_URL`: `http://YOUR-ACTUAL-DNS-HOSTNAME` (use lowercase and your actual internal DNS name).
+- `TLS_SECRET_NAME`: blank.
+- `ENABLE_INGRESS`: checked if using your cluster's existing ingress controller; otherwise unchecked when an existing proxy supplies the HTTP route.
+- Keep the registry, Kubernetes credential `cet-time`, namespace, and storage settings as configured.
+
+Jenkins may need one run to load the new parameter before it appears. HTTP ingress omits the TLS section. This does not install an ingress controller, configure DNS, or override a controller-wide HTTPS redirect. If your controller forces HTTPS, configure an appropriate HTTP pilot route there or use your existing HTTP reverse proxy. On switching an existing HTTPS app to HTTP, review old HTTPS redirects/HSTS first; fresh pilot installations do not have this issue.
+
+HTTP logins and task data are unencrypted. Restrict this pilot to a trusted internal network and use test accounts/data. In-app reminders work over HTTP; browser notifications and the one-click Clipboard API need HTTPS in normal deployments. For now, select the report's clipboard preview and copy it manually. Move to trusted HTTPS before broader student use. A self-signed certificate is not a substitute for a trusted Trello HTTPS callback.
+
+The app allows signed HTTP webhook callbacks only when `ALLOW_HTTP=true`. Trello must be able to reach the callback and receive HTTP 200 for its HEAD validation; a private internal hostname/IP is not reachable from Trello Cloud. For a private pilot use the instructor's **Refresh & sync** to import card-movement history. Live automatic updates require a reachable callback route. Trello documents HTTP callbacks here: https://developer.atlassian.com/cloud/trello/guides/rest-api/webhooks/ . There is no automatic background Trello polling in this version.
+
+When a trusted certificate is available, change `PUBLIC_URL` to HTTPS, set `TLS_SECRET_NAME` for the Ingress, turn off `ALLOW_HTTP`, and rebuild. Reconfigure any previously registered webhook for the new callback URL; changing the web address does not update it automatically.

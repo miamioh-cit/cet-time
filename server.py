@@ -148,7 +148,7 @@ class Handler(BaseHTTPRequestHandler):
                     db.execute('INSERT INTO users VALUES(?,?,?,?,0)',(uid,str(data.get('name') or uid)[:100],password(p),mid));return self.send({'ok':True})
                 if self.path=='/api/webhook':
                     if not os.getenv('TRELLO_SECRET'):raise ValueError('Configure TRELLO_SECRET (the API application secret) before enabling webhooks.')
-                    if not ORIGIN.startswith('https://'):raise ValueError('Webhooks require a reachable public HTTPS URL.')
+                    if not ORIGIN.startswith('https://') and not (ORIGIN.startswith('http://') and os.getenv('ALLOW_HTTP','false').lower()=='true'):raise ValueError('Webhooks require HTTPS, or explicit ALLOW_HTTP=true for an HTTP pilot. The callback must be reachable by Trello.')
                     cfg=get(db,'config')
                     if not cfg:raise ValueError('Configure the board first.')
                     old=get(db,'webhook')

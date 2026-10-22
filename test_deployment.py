@@ -36,6 +36,25 @@ class DeploymentTests(unittest.TestCase):
         with patch.dict(os.environ,self.e),patch('subprocess.run',return_value=inspect),contextlib.redirect_stdout(out):
             runpy.run_path('deploy/resolve_digest.py',run_name='__main__')
         self.assertEqual(out.getvalue().strip(),'docker.io/example/cet-time@sha256:'+'b'*64)
+    def test_http_pilot_has_no_tls_and_requires_opt_in(self):
+        self.e.update(PUBLIC_URL='http://time.example.edu',TLS_SECRET_NAME='',ALLOW_HTTP='true')
+        objects={i['kind']:i for i in render(self.e)['items']}
+        self.assertNotIn('tls',objects['Ingress']['spec'])
+        self.assertEqual(objects['ConfigMap']['data']['PUBLIC_URL'],'http://time.example.edu')
+        self.assertEqual(objects['ConfigMap']['data']['ALLOW_HTTP'],'true')
+        self.e['ALLOW_HTTP']='false'
+        with self.assertRaises(ValueError):render(self.e)
+    def test_https_still_requires_certificate_with_http_opt_in(self):
+        self.e.update(ALLOW_HTTP='true',TLS_SECRET_NAME='')
+        with self.assertRaises(ValueError):render(self.e)
+    def test_http_external_proxy_and_invalid_modes(self):
+        self.e.update(PUBLIC_URL='http://time.example.edu',TLS_SECRET_NAME='',ALLOW_HTTP='true',ENABLE_INGRESS='false')
+        self.assertNotIn('Ingress',[i['kind'] for i in render(self.e)['items']])
+        self.e['ALLOW_HTTP']='maybe'
+        with self.assertRaises(ValueError):render(self.e)
+    def test_http_does_not_silently_ignore_tls_secret(self):
+        self.e.update(PUBLIC_URL='http://time.example.edu',ALLOW_HTTP='true')
+        with self.assertRaises(ValueError):render(self.e)
     def test_missing_secrets_fail(self):
         with self.assertRaises(ValueError):payload({})
 if __name__=='__main__':unittest.main()
