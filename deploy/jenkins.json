@@ -1,0 +1,14 @@
+{
+  "IMAGE_REPOSITORY": "",
+  "REGISTRY_HOST": "docker.io",
+  "REGISTRY_CREDENTIAL_ID": "docker-registry",
+  "KUBECONFIG_CREDENTIAL_ID": "cet-time",
+  "KUBE_NAMESPACE": "cet-time",
+  "PUBLIC_URL": "",
+  "ENABLE_INGRESS": true,
+  "INGRESS_CLASS": "nginx",
+  "TLS_SECRET_NAME": "",
+  "STORAGE_CLASS": "",
+  "STORAGE_SIZE": "5Gi",
+  "IMAGE_PULL_SECRET": ""
+}

@@ -19,7 +19,7 @@ Map your actual list IDs during setup; the Completed list can have a different n
 
 ## Jenkins and Kubernetes
 
-Use the included `Jenkinsfile` and [JENKINS-DEPLOYMENT.md](JENKINS-DEPLOYMENT.md) to build and deploy with the Jenkins kubeconfig credential `cet-time`. The deployment includes persistent storage, HTTPS ingress configuration, health probes, and Jenkins-managed application secrets. Set your image repository and public URL as job parameters.
+Use the included `Jenkinsfile` and [JENKINS-DEPLOYMENT.md](JENKINS-DEPLOYMENT.md) to build and deploy with the Jenkins kubeconfig credential `cet-time`. The deployment includes persistent storage, HTTPS ingress configuration, health probes, and Jenkins-managed application secrets. Edit and commit the non-secret settings in [`deploy/jenkins.json`](deploy/jenkins.json) once; Jenkins loads them automatically on each build. Complete the image repository, public URL, and required infrastructure names before the first deployment. Passwords, tokens, and kubeconfig contents stay in Jenkins credentials.
 
 ## Run locally with Docker Compose
 
@@ -69,3 +69,4 @@ A break clock measures a student's current continuous working streak across thei
 Every signed-in student receives an in-app reminder on any screen. **Enable browser notifications** requests permission for an optional desktop alert to that student; instructors viewing student clocks do not receive the student's desktop alerts. The app checks reminders every 30 seconds; browser background throttling, operating-system notification settings, or network failures can delay alerts. ACETime must remain open and signed in. No closed-browser push, email, Slack, or Trello messages are sent. This is a configurable work reminder, not a payroll or break-compliance system.
 
 The sample preview includes **Show a near-4-hour example** on the Break reminders screen so you can try reminders without waiting four hours.
+

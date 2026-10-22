@@ -42,9 +42,34 @@ Use a **block-backed storage class** for SQLite (such as your cluster's vSphere 
 1. Extract this package and place its contents in a Git repository so `Jenkinsfile`, `Dockerfile`, `server.py`, and `k8s/` are at the repository root. Commit all source, including the deployment scripts. Do not commit `.env` or any database.
 2. Create a Jenkins **Pipeline** job with **Pipeline script from SCM**, select Git, enter your repository and branch, and set Script Path to `Jenkinsfile`. Use your normal Git credential if the repository is private.
 3. Use a Linux agent with `python3` (3.12+), Git, the Docker CLI and access to a Docker daemon, and `kubectl`. Required plugins are Pipeline and Credentials Binding, plus the normal Git/SCM plugins. No root/sudo command is used by the pipeline. If your Jenkins installation labels Docker-capable agents, change `agent any` to your existing label before committing.
-4. The first parameterized run may be needed for Jenkins to expose **Build with Parameters**. Blank required parameters stop validation before any deployment. Fill in the settings below and run it again.
+4. Edit and commit **`deploy/jenkins.json`** once with the deployment settings below. Jenkins loads this file after checkout on every build; you do not need to fill in **Build with Parameters**. The file is authoritative: old job parameters and environment values for these settings do not override it. On the first run with this Jenkinsfile, Jenkins removes the previous Jenkinsfile-defined parameters; a previously displayed parameter form may still appear until that run completes.
 
-| Job parameter | Set to |
+The checked-in file includes `docker.io`, registry credential ID `docker-registry`, kubeconfig ID/namespace `cet-time`, ingress class `nginx`, and storage size `5Gi`. Verify the credential IDs against your Jenkins installation. Fill in `IMAGE_REPOSITORY`, `PUBLIC_URL`, and (with Ingress enabled) `TLS_SECRET_NAME` before building. Those values are deliberately blank because they depend on your actual registry and HTTPS setup. A blank `STORAGE_CLASS` only works with a suitable cluster default or matching pre-provisioned volume; the file does not install a storage driver.
+
+Example settings (replace the example image, hostname, storage class, and Secret names with real ones):
+
+```json
+{
+  "IMAGE_REPOSITORY": "docker.io/your-account/cet-time",
+  "REGISTRY_HOST": "docker.io",
+  "REGISTRY_CREDENTIAL_ID": "docker-registry",
+  "KUBECONFIG_CREDENTIAL_ID": "cet-time",
+  "KUBE_NAMESPACE": "cet-time",
+  "PUBLIC_URL": "https://time.your-domain.edu",
+  "ENABLE_INGRESS": true,
+  "INGRESS_CLASS": "nginx",
+  "TLS_SECRET_NAME": "cet-time-tls",
+  "STORAGE_CLASS": "your-block-storage-class",
+  "STORAGE_SIZE": "5Gi",
+  "IMAGE_PULL_SECRET": ""
+}
+```
+
+Use a JSON boolean for `ENABLE_INGRESS` (`true` or `false`, without quotes). To use an existing external HTTPS reverse proxy, set it to `false`; `TLS_SECRET_NAME` can then be blank. Keep passwords, Trello keys/tokens, kubeconfig contents, and certificate private keys in Jenkins/Kubernetes credentials, never in this JSON file. Only credential IDs and Secret resource names belong here. Unknown keys, incorrect types, and missing required values fail the **Load deployment settings** stage before any image build, registry login, or cluster changes.
+
+You can check the file locally with `python3 deploy/settings.py`; it prints only non-secret environment entries. No additional Jenkins configuration-parsing plugin is needed. Existing SCM/webhook triggers can run this pipeline with the committed settings; this change does not add a new trigger or deploy automatically on every push. To start it manually, use **Build Now** after the parameter definitions have been removed.
+
+| Setting in `deploy/jenkins.json` | Set to |
 | --- | --- |
 | `IMAGE_REPOSITORY` | Full repository, e.g. `docker.io/YOUR_ORG/cet-time`, lowercase, no tag |
 | `REGISTRY_HOST` | `docker.io`, or your matching private registry host |
@@ -59,7 +84,7 @@ Use a **block-backed storage class** for SQLite (such as your cluster's vSphere 
 | `STORAGE_SIZE` | `5Gi` initially; keep this and storage class stable on subsequent builds |
 | `IMAGE_PULL_SECRET` | Existing Kubernetes registry pull Secret, if the image is private |
 
-The namespace and deployment are both named `cet-time`; the data claim is `cet-time-data`; the app's secret is `cet-time-secrets`. `k8s/*.json` are standard Kubernetes manifests in JSON syntax. `deploy/render.py` fills in the job parameters without templating secrets. Do not apply the unrendered placeholder files directly.
+The namespace and deployment are both named `cet-time`; the data claim is `cet-time-data`; the app's secret is `cet-time-secrets`. `k8s/*.json` are standard Kubernetes manifests in JSON syntax. Jenkins passes the loaded settings to `deploy/render.py` without templating secrets. Do not apply the unrendered placeholder files directly.
 
 `PUBLIC_URL` must resolve to your HTTPS entry point and reach this Service. The included Ingress routes `/`, including `/webhook`, to the app. In a MetalLB setup you can keep the application's ClusterIP Service and expose your existing ingress controller through MetalLB. If you already have a proxy route, disable the supplied Ingress and route it to `cet-time.cet-time.svc.cluster.local:80` (adjust namespace as needed). Disabling Ingress omits it from subsequent apply operations; it does not delete an Ingress created by an earlier build. Remove an obsolete route explicitly after reviewing your network configuration.
 
@@ -97,3 +122,4 @@ Local validation covers application tests and deployment rendering. A live Docke
 ## Updating break reminders
 
 Run the pipeline to deploy the break-reminder feature. There are no new Jenkins credentials, environment variables, or migrations. As instructor, open **Break reminders** to change the four-hour default or add a student-specific override. Students enable optional browser notifications in their own signed-in sessions. Keep the app open for reminders; no external messaging service is configured.
+
