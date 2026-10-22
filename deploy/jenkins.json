@@ -8,7 +8,7 @@
   "ENABLE_INGRESS": true,
   "INGRESS_CLASS": "nginx",
   "TLS_SECRET_NAME": "",
-  "STORAGE_CLASS": "",
+  "STORAGE_CLASS": "cet-time-local",
   "STORAGE_SIZE": "5Gi",
   "IMAGE_PULL_SECRET": ""
 }
