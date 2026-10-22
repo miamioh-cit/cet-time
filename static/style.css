@@ -7,3 +7,5 @@
 .email-filter{display:flex;align-items:center;gap:20px;flex-wrap:wrap}.email-filter .check{display:flex;align-items:center;gap:8px;white-space:nowrap}.email-filter input[type=checkbox]{width:auto;flex:0 0 auto}
 
 .email-recipients{margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}.email-recipients h2{margin-bottom:16px}.email-recipient-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}.email-recipient-row .field{flex:1 1 240px;margin:0}.email-recipient-row input[readonly]{background:#f7f9f8}
+.report-table{overflow-x:auto}.report-table th,.report-table td{vertical-align:top}.report-table td:first-child{min-width:120px}.report-table td:last-child{min-width:170px}
+.weekly-filter{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.weekly-filter .check{display:flex;align-items:center;gap:8px;white-space:nowrap}.weekly-filter input[type=checkbox]{width:auto;flex:0 0 auto}

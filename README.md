@@ -79,3 +79,8 @@ Open **Student Workspace → Email report**, choose a Monday week start, and gen
 
 The report uses the same calculations as Weekly report and defaults to verified hours. Include unverified time only when wanted; estimates are labeled. Edit the subject, greeting, or closing, then use **Copy subject** and **Copy email body** to paste into Gmail. On HTTP, copying falls back to selecting the text for Ctrl+C/Command+C if browser clipboard access is unavailable. Nothing is sent automatically, and no Gmail credentials or Google integration are needed.
 
+## Work dates and task completion dates
+
+Weekly report and Email report show daily task entries in the reporting timezone (America/New_York by default). Working intervals crossing midnight are split between work dates, including daylight-saving transitions. Verified adjustments are distributed proportionally across the original working intervals; daily reporting does not change total hours. Unfinished tasks can appear when Include unverified time is enabled.
+
+Completed on shows the most recent recorded move into Completed for a currently completed task. It is independent of the work date and can fall outside the selected week. Reopened tasks show Not completed. Tasks already completed before tracking started show Date not recorded rather than an invented date. Spreadsheet copy retains the existing three-column format, with the work date in Activity and completion information in Progress. Email reports include work dates, durations, and completion dates for each student.

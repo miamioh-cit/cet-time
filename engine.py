@@ -1,5 +1,5 @@
 """Deterministic, replayable Trello timing; no network or database dependencies."""
-from datetime import datetime
+from datetime import datetime,timedelta
 
 def stamp(s):
     return datetime.fromisoformat(s.replace('Z', '+00:00')).timestamp()
@@ -68,9 +68,21 @@ def summarize(sessions, confirmations, cards, member, start, end, now, verified_
         if verified_only and approved is None: continue
         seconds=overlap if approved is None else overlap*approved/max(1,finish-s['start'])
         c=cards.get(s['card'],{})
-        g=grouped.setdefault(s['card'],{'activity':c.get('name','Task'),'seconds':0,'verified':True,'list':c.get('idList')})
+        g=grouped.setdefault(s['card'],{'activity':c.get('name','Task'),'seconds':0,'verified':True,'list':c.get('idList'),'completedAt':c.get('completedAt')})
         g['seconds']+=seconds; g['verified'] &= approved is not None
     return list(grouped.values())
+
+def summarize_daily(sessions,confirmations,cards,member,start,end,now,tz,verified_only=True):
+    """Split reported hours at local midnight, including DST and proportional adjustments."""
+    rows=[]
+    day=datetime.fromtimestamp(start,tz).replace(hour=0,minute=0,second=0,microsecond=0)
+    while day.timestamp()<min(end,now):
+        following=day+timedelta(days=1)
+        daily=summarize(sessions,confirmations,cards,member,max(start,day.timestamp()),min(end,following.timestamp(),now),now,verified_only)
+        for row in daily:row['workDate']=day.strftime('%Y-%m-%d')
+        rows.extend(daily)
+        day=following
+    return rows
 
 
 def break_reminder(sessions, member, now, threshold_hours=4, snooze=None):

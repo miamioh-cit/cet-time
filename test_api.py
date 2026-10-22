@@ -119,4 +119,20 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(status,200);self.assertEqual([s['member'] for s in result['students']],['alice'])
         self.assertEqual(self.request('/api/email-report',{'week':'2026-10-19'},cookie,False)[0],403)
         self.assertEqual(self.request('/api/email-report',{'week':'2026-10-20'},cookie)[0],400)
+    def test_10_weekly_and_email_reports_share_work_and_completion_dates(self):
+        from unittest.mock import patch
+        start=datetime(2026,10,20,23,30,tzinfo=self.s.TZ).timestamp()
+        completed=datetime(2026,10,22,14,0,tzinfo=self.s.TZ).timestamp()
+        cards=[{'id':'dates','name':'Dated task','idList':'done','idMembers':['alice'],'completedAt':completed}]
+        sessions=[{'id':'dates-session','card':'dates','member':'alice','start':start,'end':start+3600}]
+        admin=self.login('admin')
+        with patch.object(self.s,'state',return_value=(cards,sessions)):
+            status,weekly,_=self.request('/api/report',{'member':'alice','week':'2026-10-19','includePending':True},admin)
+            self.assertEqual(status,200);self.assertEqual([r['workDate'] for r in weekly['rows']],['2026-10-20','2026-10-21'])
+            self.assertEqual(weekly['total'],1);self.assertTrue(all(r['completedAt']==completed and r['completionStatus']=='completed' for r in weekly['rows']))
+            status,email,_=self.request('/api/email-report',{'week':'2026-10-19','includePending':True},admin)
+            self.assertEqual(status,200);self.assertEqual(next(s for s in email['students'] if s['member']=='alice')['rows'],weekly['rows'])
+            cards[0].update(idList='working',completedAt=None)
+            _,active,_=self.request('/api/report',{'member':'alice','week':'2026-10-19','includePending':True},admin)
+            self.assertTrue(all(r['completedAt'] is None and r['completionStatus']=='not-completed' for r in active['rows']))
 if __name__=='__main__':unittest.main()

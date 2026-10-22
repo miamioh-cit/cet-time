@@ -4,7 +4,7 @@ from http.cookies import SimpleCookie
 from datetime import datetime,timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
-from engine import replay,stamp,summarize,break_reminder
+from engine import replay,stamp,summarize_daily,break_reminder
 ROOT=Path(__file__).parent
 DB=os.getenv('DATABASE_PATH','data/tracker.db'); Path(DB).parent.mkdir(parents=True,exist_ok=True)
 ORIGIN=os.getenv('PUBLIC_URL','http://localhost:8080').rstrip('/')
@@ -95,10 +95,13 @@ def report_week(week):
 
 def weekly_report(db,sessions,cardmap,member,start,end,include_pending,now):
     cf={r['session']:r['seconds'] for r in db.execute('SELECT * FROM confirmations WHERE member=?',(member,))}
-    rows=summarize(sessions,cf,cardmap,member,start.timestamp(),end.timestamp(),now,not include_pending)
+    rows=summarize_daily(sessions,cf,cardmap,member,start.timestamp(),end.timestamp(),now,TZ,not include_pending)
     cfg=get(db,'config',{}).get('lists',{})
     labels={cfg.get('active'):'In process',cfg.get('blocked'):'Blocked',cfg.get('done'):'Completed',cfg.get('backlog'):'Backlog'}
-    for r in rows:r['progress']=labels.get(r.pop('list'),'Other')+(' — verified' if r['verified'] else ' — unverified')
+    for r in rows:
+        status=r.pop('list')
+        r['completionStatus']='completed' if status==cfg.get('done') else 'not-completed'
+        r['progress']=labels.get(status,'Other')+(' — verified' if r['verified'] else ' — unverified')
     return {'rows':rows,'total':sum(r['seconds'] for r in rows)/3600,'timezone':str(TZ)}
 
 def reminders(db,sessions,user):
@@ -125,7 +128,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.send_response(200 if self.path=='/webhook' else 404);self.end_headers()
     def do_GET(self):
-        if self.path in ('/','/app.js','/break-reminders.js','/email-report.js','/style.css'):
+        if self.path in ('/','/app.js','/break-reminders.js','/email-report.js','/report-dates.js','/style.css'):
             path=ROOT/'static'/({'/':'index.html'}.get(self.path,self.path[1:]))
             raw=path.read_bytes();self.send_response(200)
             self.send_header('Content-Type',{'html':'text/html; charset=utf-8','js':'text/javascript','css':'text/css'}[path.suffix[1:]])

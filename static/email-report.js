@@ -5,11 +5,11 @@ function formatEmailReport(data){
   const mode=data.includePending?'Recorded hours (includes unverified time)':'Verified hours';
   const line=s=>String(s??'').replace(/[\r\n\t]+/g,' ');
   const sections=data.students.map(s=>{
-    const details=s.rows.length?s.rows.map(r=>`• ${line(r.activity)} — ${(r.seconds/3600).toFixed(2)} hours (${line(r.progress)})`).join('\n'):(data.includePending?'No recorded hours for this week.':'No verified hours for this week.');
+    const details=s.rows.length?s.rows.map(r=>`• ${reportWorkDate(r)} | ${line(r.activity)} — ${(r.seconds/3600).toFixed(2)} hours (${reportDuration(r.seconds)}; ${line(r.progress)})\n  Completed on: ${reportCompletedOn(r,data.timezone)}`).join('\n'):(data.includePending?'No recorded hours for this week.':'No verified hours for this week.');
     return `${line(s.name)}\n${mode}: ${s.total.toFixed(2)} hours\n${details}`;
   });
   const total=data.students.reduce((sum,s)=>sum+s.total,0);
-  return {subject:`Weekly student time report — ${range}`,body:`Hello,\n\nPlease find the weekly student time report for ${range} below.\nReporting timezone: ${data.timezone}.\n${data.includePending?'Unverified time is included and labeled below; it has not been confirmed.':'Only verified hours are included.'}\n\n${sections.join('\n\n')}\n\nCombined ${data.includePending?'recorded':'verified'} student hours: ${total.toFixed(2)} hours.\nGroup tasks count each student's contribution separately. Task statuses are current; hours belong to the selected week.\n\nThank you,`};
+  return {subject:`Weekly student time report — ${range}`,body:`Hello,\n\nPlease find the weekly student time report for ${range} below.\nReporting timezone: ${data.timezone}.\n${data.includePending?'Unverified time is included and labeled below; it has not been confirmed.':'Only verified hours are included.'}\n\n${sections.join('\n\n')}\n\nCombined ${data.includePending?'recorded':'verified'} student hours: ${total.toFixed(2)} hours.\nGroup tasks count each student's contribution separately. Entries are split by work date in the reporting timezone. Task statuses and most recent completion dates reflect the current task state. Completion dates that predate tracking may be unavailable.\n\nThank you,`};
 }
 function emailReportView(){
   const draft=emailReportDraft;
