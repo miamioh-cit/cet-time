@@ -1,5 +1,5 @@
 """Render Kubernetes objects using validated, non-secret environment inputs."""
-import argparse,json,os,re
+import argparse,ipaddress,json,os,re
 from pathlib import Path
 from urllib.parse import urlsplit
 ROOT=Path(__file__).resolve().parents[1]
@@ -8,12 +8,19 @@ def render(e):
     ns=e.get('KUBE_NAMESPACE','cet-time')
     dns=r'[a-z0-9](?:[-a-z0-9]*[a-z0-9])?'
     if not re.fullmatch(dns,ns) or len(ns)>63:raise ValueError('KUBE_NAMESPACE must be a DNS label.')
+    enabled=e.get('ENABLE_INGRESS','true').lower()
+    if enabled not in ('true','false'):raise ValueError('ENABLE_INGRESS must be true or false.')
     url=e.get('PUBLIC_URL','').rstrip('/');u=urlsplit(url)
     if u.scheme!='http' or not u.hostname or u.username or u.password or u.path or u.query or u.fragment:raise ValueError('This deployment is HTTP-only. Set PUBLIC_URL=http://your-hostname without a path, query, or credentials.')
-    if u.port is not None:raise ValueError('Use a hostname without an explicit port in PUBLIC_URL.')
-    if not re.fullmatch(r'[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?',u.hostname) or '.' not in u.hostname:raise ValueError('PUBLIC_URL must use a DNS hostname.')
+    if not re.fullmatch(r'[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?',u.hostname) or '.' not in u.hostname:raise ValueError('PUBLIC_URL must use a DNS hostname or IPv4 address.')
+    is_ip=bool(re.fullmatch(r'[0-9.]+',u.hostname))
+    if is_ip:ipaddress.IPv4Address(u.hostname)
+    port=u.port
+    if port is not None and not 1<=port<=65535:raise ValueError('PUBLIC_URL port must be between 1 and 65535.')
+    if enabled=='true' and (is_ip or port is not None):raise ValueError('Ingress requires a DNS hostname without an explicit port. Set ENABLE_INGRESS=false for direct LoadBalancer access.')
     # The server compares browser Origin exactly, so do not silently normalize user input.
-    if url!=u.scheme+'://'+u.hostname:raise ValueError('PUBLIC_URL must be lowercase scheme://hostname with no explicit port.')
+    canonical='http://'+u.hostname+((':'+str(port)) if port is not None and port!=80 else '')
+    if url!=canonical:raise ValueError('PUBLIC_URL must match the browser origin exactly: lowercase http://host[:port], with no explicit default port 80.')
     repo=e.get('IMAGE_REPOSITORY','');host=e.get('REGISTRY_HOST','docker.io')
     if not re.fullmatch(r'[a-z0-9][a-z0-9.-]*(?::[0-9]{1,5})?',host):raise ValueError('REGISTRY_HOST is invalid.')
     if not re.fullmatch(re.escape(host)+r'/[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)+',repo):raise ValueError('IMAGE_REPOSITORY must include registry/owner/image, lowercase and without a tag.')
@@ -24,8 +31,6 @@ def render(e):
     for key in ('INGRESS_CLASS','IMAGE_PULL_SECRET','NFS_PV_NAME'):
         v=e.get(key,'')
         if v and (len(v)>253 or not re.fullmatch(r'[a-z0-9](?:[-a-z0-9.]*[a-z0-9])?',v)):raise ValueError(key+' is not a Kubernetes resource name.')
-    enabled=e.get('ENABLE_INGRESS','true').lower()
-    if enabled not in ('true','false'):raise ValueError('ENABLE_INGRESS must be true or false.')
     items=[]
     for filename in ('pvc.json','configmap.json','deployment.json','service.json'):
         o=json.loads((ROOT/'k8s'/filename).read_text());o['metadata']['namespace']=ns;items.append(o)

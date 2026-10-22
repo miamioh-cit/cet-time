@@ -27,6 +27,24 @@ class DeploymentTests(unittest.TestCase):
         for k,v in [('PUBLIC_URL','https://time.example.edu'),('PUBLIC_URL','https://time.example.edu/path'),('PUBLIC_URL','https://USER:SECRET@time.example.edu'),('IMAGE_REF','evil/repo:latest'),('KUBE_NAMESPACE','bad; echo secret'),('NFS_PV_NAME','bad name')]:
             e=dict(self.e);e[k]=v
             with self.subTest(k=k,v=v),self.assertRaises(ValueError):render(e)
+    def test_direct_loadbalancer_preserves_browser_origin(self):
+        self.e.update(PUBLIC_URL='http://10.48.229.63:8080',ENABLE_INGRESS='false')
+        items={x['kind']:x for x in render(self.e)['items']}
+        self.assertEqual(items['ConfigMap']['data']['PUBLIC_URL'],'http://10.48.229.63:8080')
+        self.assertNotIn('Ingress',items)
+        self.assertEqual(items['Service']['spec']['type'],'ClusterIP')
+        self.assertEqual(items['Service']['spec']['selector'],{'app.kubernetes.io/name':'cet-time'})
+    def test_external_proxy_origins(self):
+        for url in ('http://time.example.edu:8080','http://10.48.229.63','http://time.example.edu'):
+            with self.subTest(url=url):
+                items={x['kind']:x for x in render(dict(self.e,PUBLIC_URL=url,ENABLE_INGRESS='false'))['items']}
+                self.assertEqual(items['ConfigMap']['data']['PUBLIC_URL'],url)
+    def test_ingress_rejects_ip_and_custom_port(self):
+        for url in ('http://10.48.229.63','http://10.48.229.63:8080','http://time.example.edu:8080'):
+            with self.subTest(url=url),self.assertRaises(ValueError):render(dict(self.e,PUBLIC_URL=url,ENABLE_INGRESS='true'))
+    def test_direct_origin_rejects_invalid_or_noncanonical_values(self):
+        for url in ('http://10.48.229.999:8080','http://10.48.229.63:0','http://10.48.229.63:65536','http://10.48.229.63:abc','http://10.48.229.63:08080','http://10.48.229.63:80','http://TIME.example.edu:8080','https://10.48.229.63:8080','http://user:password@10.48.229.63:8080','http://10.48.229.63:8080/path','http://10.48.229.63:8080?query=1','http://10.48.229.63:8080#fragment'):
+            with self.subTest(url=url),self.assertRaises(ValueError):render(dict(self.e,PUBLIC_URL=url,ENABLE_INGRESS='false'))
     def test_secrets_do_not_enter_manifests(self):
         self.e.update(ADMIN_PASSWORD='unique-secret-12345',TRELLO_KEY='test-key',TRELLO_TOKEN='test-token',TRELLO_SECRET='test-secret')
         import json

@@ -9,7 +9,7 @@
     }
   },
   "data": {
-    "PUBLIC_URL": "http://time.example.edu",
+    "PUBLIC_URL": "http://10.48.229.63:8080",
     "TIMEZONE": "America/New_York",
     "DATABASE_PATH": "/app/data/tracker.db",
     "PYTHONDONTWRITEBYTECODE": "1",
