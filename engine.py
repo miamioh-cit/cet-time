@@ -18,7 +18,9 @@ def replay(baseline, events, lists, now):
                 begin, eid = running.pop(k)
                 if t > begin:
                     sessions.append(dict(id=f'{eid}:{k[0]}:{k[1]}:{t}', card=k[0], member=k[1], start=begin, end=t))
-    for c in cards.values(): enter(c, start, 'baseline')
+    for c in cards.values():
+        c['completedAt']=None
+        enter(c, start, 'baseline')
     for e in sorted(events, key=lambda x: (stamp(x['date']), x['id'])):
         t = stamp(e['date'])
         if t < start: continue
@@ -26,6 +28,7 @@ def replay(baseline, events, lists, now):
         cid = d.get('card', {}).get('id')
         if not cid: continue
         c = cards.setdefault(cid, dict(id=cid, name=d['card'].get('name', 'Task'), idMembers=[], idList=None, closed=False))
+        previous_list=c.get('idList')
         # Every state-affecting change splits sessions so attribution is stable.
         if typ in ('createCard', 'copyCard', 'moveCardToBoard'):
             stop(c,t)
@@ -45,10 +48,14 @@ def replay(baseline, events, lists, now):
             if d.get('card',{}).get('name'): c['name']=d['card']['name']
             continue
         if d.get('card',{}).get('name'): c['name']=d['card']['name']
+        if c.get('idList') != previous_list:
+            c['completedAt']=t if c.get('idList')==lists['done'] else None
         enter(c,t,e['id'])
     for (cid,m), (begin,eid) in running.items():
         sessions.append(dict(id=f'{eid}:{cid}:{m}',card=cid,member=m,start=begin,end=None))
-    return list(cards.values()), sessions
+    # Stable sorting keeps other columns and unknown baseline completion dates in their existing order.
+    ordered=sorted(cards.values(),key=lambda c:(c.get('completedAt') or 0) if c.get('idList')==lists['done'] else 0,reverse=True)
+    return ordered, sessions
 
 def summarize(sessions, confirmations, cards, member, start, end, now, verified_only=True):
     grouped={}
