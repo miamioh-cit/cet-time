@@ -62,7 +62,8 @@ function bindBreakReminders(){
 let breakPolling=false;
 async function pollBreakReminders(){
     if(!state||breakPolling)return;breakPolling=true;
-    try{const r=await api('reminders');if(!state)return;state.breakReminders=r.reminders;renderBreakReminders();const status=$('#break-connection-status');if(status)status.textContent='';}
+    try{const r=await api('reminders');if(!state)return;state.breakReminders=r.reminders;state.timerReminders=r.timerReminders||[];renderBreakReminders();renderTimerReminders();const status=$('#break-connection-status');if(status)status.textContent='';}
     catch(e){const target=$('#break-reminders');if(target)target.innerHTML='<p id="break-connection-status" class="notice">Break reminders could not refresh. Check your connection.</p>';}
     finally{breakPolling=false}
 }
+

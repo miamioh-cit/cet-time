@@ -37,7 +37,7 @@ async function bindImprovements(){
 }
 
 function auditDescription(p){
-  const names={'correction-request':'Requested a time correction','correction-approved':'Approved a time correction','correction-rejected':'Rejected a time correction','password-change':'Changed their password','account-reset':'Reset student password','account-disable':'Disabled student access','account-enable':'Enabled student access','account-revoke':'Signed out all sessions','break-settings':'Updated break reminder settings'};
+  const names={'database-backup':'Created a verified database backup','timer-settings':'Updated forgotten timer reminders','correction-request':'Requested a time correction','correction-approved':'Approved a time correction','correction-rejected':'Rejected a time correction','password-change':'Changed their password','account-reset':'Reset student password','account-disable':'Disabled student access','account-enable':'Enabled student access','account-revoke':'Signed out all sessions','break-settings':'Updated break reminder settings'};
   const details=p.payload||p;
   return [names[p.action]||'Confirmed time',details.card?taskName(details.card):'',p.member?memberName(p.member):'',p.target||'',details.hours!=null?Number(details.hours).toFixed(2)+' hours':'',p.previousSeconds!=null?'Previously '+(p.previousSeconds/3600).toFixed(2)+' hours':'',details.note||'',p.note&&p.note!==details.note?p.note:''].filter(Boolean).join(' · ');
 }

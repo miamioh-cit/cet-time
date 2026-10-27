@@ -12,8 +12,11 @@
     "PUBLIC_URL": "http://10.48.229.63:8080",
     "TIMEZONE": "America/New_York",
     "DATABASE_PATH": "/app/data/tracker.db",
+    "BACKUP_INTERVAL_HOURS": "6",
+    "BACKUP_KEEP": "28",
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHONUNBUFFERED": "1",
     "ALLOW_HTTP": "true"
   }
 }
+

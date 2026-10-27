@@ -1,0 +1,14 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const context=vm.createContext({console,Date,Intl,Promise,location:{hostname:'localhost'},document:{documentElement:{dataset:{}},querySelector:()=>({innerHTML:''})},localStorage:{getItem:()=>null},fetch:()=>new Promise(()=>{}),setInterval:()=>{},setTimeout:()=>{},pollBreakReminders:()=>{}});
+for(const file of ['productivity.js','app.js'])vm.runInContext(fs.readFileSync('static/'+file,'utf8'),context);
+vm.runInContext(`state={user:{name:'Instructor',admin:true},members:[{id:'alice',fullName:'Alice Student'},{id:'bob',fullName:'Jordan Lee'}],config:{lists:{active:'working',done:'done'}},cards:[{id:'a',name:'Sensor model',idList:'working',idMembers:['alice']},{id:'b',name:'Group notes',idList:'done',idMembers:['alice','bob']},{id:'c',name:'New task',idList:'working',idMembers:['bob']}],sessions:[{id:'a1',card:'a',member:'alice',start:1,end:null},{id:'b1',card:'b',member:'alice',start:1,end:2},{id:'b2',card:'b',member:'bob',start:1,end:2}],confirmations:{b1:1}}`,context);
+const ids=()=>Array.from(vm.runInContext('filterBoardCards(state.cards).map(c=>c.id)',context));
+vm.runInContext("boardFilters.query='SENSOR'",context);assert.deepEqual(ids(),['a']);
+vm.runInContext("boardFilters.query='Jordan'",context);assert.deepEqual(ids(),['b','c']);
+vm.runInContext("boardFilters={query:'',status:'active',verification:''}",context);assert.deepEqual(ids(),['a','c']);
+vm.runInContext("boardFilters={query:'',status:'',verification:'unverified'}",context);assert.deepEqual(ids(),['a','b']);
+vm.runInContext("boardFilters.verification='verified'",context);assert.deepEqual(ids(),[]);
+vm.runInContext("selected='alice'",context);assert.deepEqual(ids(),['b']);
+vm.runInContext("boardFilters.verification='empty';selected=''",context);assert.deepEqual(ids(),['c']);
+vm.runInContext("resetProductivity()",context);assert.equal(vm.runInContext('selected',context),'');assert.deepEqual(ids(),['a','b','c']);
+console.log('Task search, student names, status filters, scoped verification, and reset checks passed.');
