@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from pathlib import Path
 from engine import replay,stamp,summarize_daily,break_reminder
 import improvements
+import productivity,backups
 import sys
 # Feature routes share this process's connection lock when launched as a script.
 if __name__=='__main__':sys.modules['server']=sys.modules[__name__]
@@ -144,6 +145,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('X-Content-Type-Options','nosniff')
         for k,v in (headers or {}).items():self.send_header(k,v)
         self.end_headers();self.wfile.write(raw)
+    def download(self,content,name,mime):
+        self.send_response(200);self.send_header('Content-Type',mime)
+        self.send_header('Content-Disposition','attachment; filename="'+name+'"')
+        self.send_header('Content-Length',str(len(content)));self.send_header('Cache-Control','no-store')
+        self.send_header('X-Content-Type-Options','nosniff');self.end_headers();self.wfile.write(content)
+    def file_download(self,file,name,mime):
+        import shutil
+        self.send_response(200);self.send_header('Content-Type',mime)
+        self.send_header('Content-Disposition','attachment; filename="'+name+'"')
+        self.send_header('Content-Length',str(os.fstat(file.fileno()).st_size));self.send_header('Cache-Control','no-store')
+        self.send_header('X-Content-Type-Options','nosniff');self.end_headers();shutil.copyfileobj(file,self.wfile,1024*1024)
     def body(self):
         n=int(self.headers.get('Content-Length','0'))
         if n>1048576:raise ValueError('Request too large.')
@@ -156,7 +168,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.send_response(200 if self.path=='/webhook' else 404);self.end_headers()
     def do_GET(self):
-        if self.path in ('/','/app.js','/break-reminders.js','/email-report.js','/report-dates.js','/improvements.js','/theme.js','/style.css'):
+        if self.path in ('/','/app.js','/break-reminders.js','/email-report.js','/report-dates.js','/improvements.js','/theme.js','/productivity.js','/style.css'):
             path=ROOT/'static'/({'/':'index.html'}.get(self.path,self.path[1:]))
             raw=path.read_bytes();self.send_response(200)
             self.send_header('Content-Type',{'html':'text/html; charset=utf-8','js':'text/javascript','css':'text/css'}[path.suffix[1:]])
@@ -170,6 +182,11 @@ class Handler(BaseHTTPRequestHandler):
             if self.path=='/webhook':return self.webhook(raw)
             if self.headers.get('Origin')!=ORIGIN:return self.send({'error':'Origin not allowed'},403)
             data=json.loads(raw or b'{}')
+            if self.path in ('/api/backups','/api/backup-now','/api/backup-download'):
+                with connect() as db:
+                    user=self.user(db)
+                    if not user:return self.send({'error':'Please sign in.'},401)
+                return productivity.backup_route(self,user,data)
             with connect() as db:
                 user=self.user(db)
                 if self.path=='/api/login':
@@ -236,10 +253,11 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send({'ok':True})
                 cards,sessions=state(db);cardmap={c['id']:c for c in cards}
                 if improvements.route(self,db,user,data,cards,sessions):return
+                if productivity.route(self,db,user,data,cards,sessions):return
                 member=user['member']
                 if admin:member=data.get('member') or member
                 if self.path=='/api/reminders':
-                    return self.send({'reminders':reminders(db,sessions,user)})
+                    return self.send({'reminders':reminders(db,sessions,user),'timerReminders':productivity.timer_reminders(db,sessions,user,time.time())})
                 if self.path=='/api/snooze-break':
                     # A student can snooze only their own reminder; request member IDs are ignored.
                     mid=user['member']
@@ -267,7 +285,7 @@ class Handler(BaseHTTPRequestHandler):
                 if self.path=='/api/state':
                     cf={r['session']:r['seconds'] for r in db.execute('SELECT * FROM confirmations')}
                     if not admin:sessions=[s for s in sessions if s['member']==member];cards=[c for c in cards if member in c.get('idMembers',[]) or any(s['card']==c['id'] for s in sessions)]
-                    return self.send({'user':{'name':user['name'],'admin':admin,'member':user['member']},'config':get(db,'config'),'members':get(db,'members',[]) if admin else [],'cards':cards,'sessions':sessions,'confirmations':{s['id']:cf[s['id']] for s in sessions if s['id'] in cf},'overlaps':improvements.overlaps(sessions,time.time()),'trackingHealth':improvements.health(db) if admin else None,'breakReminders':reminders(db,sessions,user),'breakSettings':break_settings(db) if admin else None,'lastSync':get(db,'last_sync'),'webhook':bool(get(db,'webhook')),'timezone':str(TZ)})
+                    return self.send({'user':{'name':user['name'],'admin':admin,'member':user['member']},'config':get(db,'config'),'members':get(db,'members',[]) if admin else [],'cards':cards,'sessions':sessions,'confirmations':{s['id']:cf[s['id']] for s in sessions if s['id'] in cf},'overlaps':improvements.overlaps(sessions,time.time()),'trackingHealth':improvements.health(db) if admin else None,'timerReminders':productivity.timer_reminders(db,sessions,user,time.time()),'timerSettings':productivity.timer_settings(db),'breakReminders':reminders(db,sessions,user),'breakSettings':break_settings(db) if admin else None,'lastSync':get(db,'last_sync'),'webhook':bool(get(db,'webhook')),'timezone':str(TZ)})
                 if self.path=='/api/report':
                     if not member:raise ValueError('Select a student.')
                     start,end=report_week(data['week'])
@@ -296,5 +314,5 @@ class Handler(BaseHTTPRequestHandler):
                 db.execute('INSERT OR IGNORE INTO events VALUES(?,?)',(action['id'],json.dumps(action)));put(db,'last_webhook',time.time())
         self.send({'ok':True})
 if __name__=='__main__':
-    init();threading.Thread(target=reconcile_loop,daemon=True).start();ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','8080'))),Handler).serve_forever()
+    init();threading.Thread(target=backups.loop,args=(DB,DB_LOCK),daemon=True).start();threading.Thread(target=reconcile_loop,daemon=True).start();ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','8080'))),Handler).serve_forever()
 

@@ -453,3 +453,35 @@ dialog h2 { margin: 12px 0; }
   .login-theme + .login-layout { margin-top: 18px; }
 }
 @media (prefers-reduced-motion: reduce) { .theme-switch::after { transition: none; } }
+
+.task-filters { margin-bottom: 0; gap: 14px; }
+.task-filters>label:first-child { flex: 1 1 240px; }
+.task-filters>label { flex: 1 1 180px; }
+.task-filters>.btn { align-self: flex-end; margin-bottom: 1px; }
+#board-results { margin: 12px 0 18px; }
+.report-actions { display: flex; justify-content: flex-end; margin: -10px 0 20px; }
+.review-filter { align-items: flex-end; }
+.review-filter .check { align-self: center; }
+#productivity-content { min-width: 0; }
+#productivity-content .sectionhead { margin: 0 0 16px; flex-wrap: wrap; }
+#productivity-content .pendingrow { flex-wrap: wrap; }
+#productivity-content .pendingrow>div { min-width: 0; }
+#productivity-content .pendingrow p { overflow-wrap: anywhere; }
+.review-checklist { margin: 22px 0; padding: 0; list-style: none; }
+.review-checklist li { display: flex; align-items: center; gap: 13px; padding: 16px 0; border-top: 1px solid var(--line); font-size: 12px; }
+.review-checklist li>span:nth-child(2) { flex: 1; }
+.review-checklist small { display: block; color: var(--muted); margin-top: 5px; font-size: 11px; }
+.check-mark { display: grid; place-items: center; height: 28px; width: 28px; border-radius: 50%; color: #8c681d; background: #fff2d9; font-weight: 700; flex-shrink: 0; }
+.check-mark.complete { background: #e9f5ec; color: #38775a; }
+.timer-notice p { margin: 7px 0; }
+.timer-notice ul { padding: 0; margin: 12px 0 0; list-style: none; }
+.timer-notice li { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding-top: 8px; }
+[data-theme=dark] .check-mark { color: #e8c88c; background: #463d2b; }
+[data-theme=dark] .check-mark.complete { color: #b4dfc5; background: #264b3d; }
+@media (max-width:700px) {
+  .task-filters>label, .task-filters>label:first-child { flex: 1 1 100%; }
+  .report-actions { justify-content: flex-start; }
+  .review-filter .check { align-self: flex-start; }
+  .review-checklist li { gap: 10px; }
+  .review-checklist li>.badge { font-size: 8px; }
+}

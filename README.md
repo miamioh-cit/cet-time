@@ -105,3 +105,34 @@ The new correction, manual-session, and account-status tables are created automa
 ## Light and dark mode
 
 Use **Dark mode** on the sign-in screen or in the workspace header to toggle the appearance. Light mode remains the initial default. The choice is saved in this browser, survives sign-in/sign-out and reloads, and updates other tabs on the same origin. When browser storage is unavailable, switching still works for the current page. The theme is applied before styles load to avoid showing a light page before a saved dark theme. Both themes cover reports, forms, task cards, alerts, and verification dialogs. This is a browser preference, not an account setting.
+
+
+## Search, weekly review, and CSV downloads
+
+The Overview task board can be searched by task or assigned student name and filtered by status and time verification. The existing student filter scopes both board records and time totals. Search/status/verification narrow the displayed cards without changing recorded totals. Clear filters resets the board filters.
+
+**Weekly review** checks a selected Monday week for configuration, recent successful Trello reconciliation, unconfirmed intervals (including unfinished work), unresolved corrections, long-running timers, and overlapping intervals. Overlaps are advisory; the checklist does not lock or certify a timesheet. A stale sync or an unfinished timer should be reviewed before final reporting. Instructors can review the class or one registered student; students see only themselves. Totals use the same calculations as Weekly report and Email report.
+
+Download **CSV** as daily task entries or student totals. CSV opens in Excel, includes a UTF-8 BOM, and treats task/student text as text to prevent spreadsheet formula execution. Class exports require instructor access and include every registered student, including zero-hour accounts. Student downloads cannot request another student's records. Verified hours are the default; unverified time is included only when explicitly selected and is labeled. Task rows are rounded individually to two decimals; summary totals are rounded once, so summing displayed daily rows can differ by a centihour.
+
+## Forgotten timer reminders
+
+Tasks recording continuously for **8 hours** are flagged on every workspace screen. Instructors can set the threshold from 0.5 to 72 hours under Weekly review. Touching intervals split by assignment changes still count as one continuous card/student timer; an actual pause resets the streak. Students can snooze their own task reminder for one hour. The reminder does not stop timers, change hours, or move Trello cards. Pause work in Trello and request corrections for inaccurate time. Reminders update while the portal is open and signed in, using the existing 30-second polling; no closed-browser push or messages are sent.
+
+## Automatic database backups and recovery
+
+The single application process creates a verified SQLite snapshot on its first backup-worker pass, then every **6 hours** after the latest successful snapshot. The newest **28** snapshots are retained by default. Snapshots use SQLite's online backup API while holding the app's database lock, pass `PRAGMA quick_check`, and are published by atomic rename only after completion. Failed snapshots do not trigger retention deletion; failed attempts retry after five minutes. Partial files are never listed as downloadable snapshots. Portal requests can wait during a large snapshot.
+
+The instructor-only **Backups** screen shows schedule/status and saved snapshots, supports **Back up now**, and downloads database copies. Backup files contain account hashes, sessions, student records, and audit history: keep downloaded files private. Files are not served through the static file routes. Their default location is `backups/` beside `DATABASE_PATH`, inside the existing persistent data mount. No extra Jenkins credential is required.
+
+Configure `BACKUP_INTERVAL_HOURS` (default 6), `BACKUP_KEEP` (default 28), and optionally `BACKUP_DIRECTORY` on the server. Docker Compose persists the default directory in its data volume; Kubernetes persists it under `/app/data/backups` on the existing NFS mount. A custom directory must be writable and mounted persistently. The built-in snapshots share the default storage failure domain: download/copy snapshots to independent storage for protection against loss of the server/export. This release does not configure off-site replication. Watch available space and backup status; local tests cannot certify production NFS durability.
+
+To recover data, first stop the running app and preserve its current data directory. Restore a chosen snapshot into a **new** file for inspection:
+
+```sh
+python backups.py --restore /path/to/acetime-snapshot.sqlite3 --output /path/to/restored.sqlite3
+```
+
+The utility refuses to overwrite an existing output and verifies the restored database. With the app still stopped, retain the old database separately, replace the database at `DATABASE_PATH` with the verified restored file, restore the application's file ownership, and restart. Never replace or copy over a live SQLite database. Restoring an older snapshot also restores its older account/session state. Git backup branches protect code; database snapshots protect recorded data. Reverting code does not restore data.
+
+Additional checks: `node test_theme.cjs`, `node test_productivity.cjs`, `node test_email_report.cjs`, and `node test_report_dates.cjs`. Python regression tests include backup rotation, failed-backup preservation, restoration, CSV permissions/totals, weekly readiness, and private reminder snoozing.

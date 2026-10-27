@@ -109,15 +109,16 @@ The check creates and removes a separate temporary SQLite database beside the ap
 
 1. Open your HTTP PUBLIC_URL and log in as `admin` using `cet-time-admin-password`.
 2. Connections → Load boards → choose your board → map the four lists → activate tracking.
-3. Register the signed HTTP webhook only if Trello Cloud can reach the callback at `PUBLIC_URL/webhook` and receive HTTP 200 for HEAD validation. A private internal-only URL cannot receive Trello Cloud webhooks; use instructor **Refresh & sync** during the pilot. There is no background Trello polling in this version.
+3. Register the signed HTTP webhook only if Trello Cloud can reach the callback at `PUBLIC_URL/webhook` and receive HTTP 200 for HEAD validation. A private internal-only URL cannot receive Trello Cloud webhooks; use instructor **Refresh & sync** during the pilot. The server also reconciles history every five minutes while running; inspect tracking health before final reporting.
 4. Create individual student logins and test the working → paused → working → completed workflow.
 
 HTTP login traffic is unencrypted. Keep this on a trusted internal network with test accounts/data. In-app break reminders work; browser notifications and the one-click Clipboard API need HTTPS in normal browser deployments. Select and manually copy the report's clipboard preview during the HTTP pilot. Trello permits reachable HTTP callbacks but rejects invalid HTTPS certificates: https://developer.atlassian.com/cloud/trello/guides/rest-api/webhooks/ .
 
 ## Updates and backups
 
-The app uses **one replica**, Recreate deployment strategy, a per-process lock around all DB sessions, DELETE rollback journaling, synchronous FULL, and a 30-second SQLite busy timeout. Each context-managed DB session closes its connection. Recreate briefly interrupts the portal during rollout; instructor Refresh & sync recovers Trello history afterward. There is no automatic rollback, PV/PVC deletion, or database backup.
+The app uses **one replica**, Recreate deployment strategy, a per-process lock around all DB sessions, DELETE rollback journaling, synchronous FULL, and a 30-second SQLite busy timeout. Each context-managed DB session closes its connection. Recreate briefly interrupts the portal during rollout; instructor Refresh & sync recovers Trello history afterward. There is no automatic rollback or PV/PVC deletion. The server creates verified, rotating database snapshots every six hours by default.
 
-Back up using SQLite's online backup API through a controlled app maintenance operation, or stop the app before copying the entire app data directory. Do not copy only a live database file while a journal transaction is running. Keep separate backup copies outside this export. If migrating existing records from a previous mount, stop the old app, preserve its full data, and copy the DB into `/srv/nfs/roseaw/cet-time/` with the correct ownership before starting this deployment.
+Use the instructor Backups screen for verified snapshots and downloads, or stop the app before copying the entire app data directory. Automatic snapshots default to `/app/data/backups` on the existing persistent mount; `BACKUP_INTERVAL_HOURS=6` and `BACKUP_KEEP=28` are included in the ConfigMap. Keep an independent copy outside the NFS export. See README for the offline restore procedure. Do not copy only a live database file while a journal transaction is running. Keep separate backup copies outside this export. If migrating existing records from a previous mount, stop the old app, preserve its full data, and copy the DB into `/srv/nfs/roseaw/cet-time/` with the correct ownership before starting this deployment.
 
 Changing the initial admin-password Jenkins secret does not reset an existing account. Deployment rollback changes the workload only, not persistent data, Secrets, or ConfigMaps. Keep this pilot at one running instance.
+
