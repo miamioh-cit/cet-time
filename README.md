@@ -100,3 +100,8 @@ Overlap notices appear on workspace screens and in the verification dialog, for 
 Tracking health distinguishes the last signed webhook received from the last successful full history sync. The single server process retries reconciliation every five minutes; errors and syncs older than 15 minutes flag potentially incomplete reports. A recent sync is not proof of webhook delivery. The manual Sync now button remains available. Full history replay and network sync currently serialize database access; large boards or Trello outages can delay portal requests. Keep a single replica.
 
 The new correction, manual-session, and account-status tables are created automatically at startup without changing existing user columns. Back up the database before upgrading. Docker includes the new server module. These features require the connected app; the separate sample preview displays an availability message for the new screens. No automatic email or Trello messages are sent.
+
+
+## Light and dark mode
+
+Use **Dark mode** on the sign-in screen or in the workspace header to toggle the appearance. Light mode remains the initial default. The choice is saved in this browser, survives sign-in/sign-out and reloads, and updates other tabs on the same origin. When browser storage is unavailable, switching still works for the current page. The theme is applied before styles load to avoid showing a light page before a saved dark theme. Both themes cover reports, forms, task cards, alerts, and verification dialogs. This is a browser preference, not an account setting.
