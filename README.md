@@ -15,7 +15,7 @@ Map your actual list IDs during setup; the Completed list can have a different n
 
 **Group work:** every member receives the full elapsed interval while assigned, then confirms their actual contribution separately. Hours are not divided between members. Assignment changes split intervals at the event time. One student account maps to one Trello member. Individual accounts prevent students from viewing or confirming someone else's records. The instructor can review and verify on behalf of a selected student; the audit records who confirmed.
 
-**Confirmation:** elapsed time is a ceiling; students can reduce it to account for breaks. An explanatory note is required for adjustments greater than one minute. This version does not support adding time above elapsed time, editing an already confirmed submission, or manual entries. Verification appears in the tracker; this is not a Trello Power-Up and cannot show a modal inside Trello. Students must open the tracker. No messages/comments are posted to Trello.
+**Confirmation:** elapsed time is a ceiling; students can reduce it to account for breaks. An explanatory note is required for adjustments greater than one minute. Direct verification remains capped at elapsed time. Use Time corrections to request changes to a finished interval (including confirmed work) or add missing time; an instructor must approve each request. Verification appears in the tracker; this is not a Trello Power-Up and cannot show a modal inside Trello. Students must open the tracker. No messages/comments are posted to Trello.
 
 ## Jenkins and Kubernetes
 
@@ -30,7 +30,7 @@ Use the included `Jenkinsfile` and [JENKINS-DEPLOYMENT.md](JENKINS-DEPLOYMENT.md
 5. Log in as the instructor. Connections → Load my Trello boards → choose the board → map the four lists → Activate tracking. This step starts tracking now; it does not assume any earlier hours. Existing working cards start at activation.
 6. Click **Register Trello webhook**. The exact callback is `PUBLIC_URL + /webhook`; Trello validates it with HEAD. Registration is idempotent in the portal. The API app secret is needed for signature verification. Official webhook documentation: https://developer.atlassian.com/cloud/trello/guides/rest-api/webhooks/
 7. Create student logins under Connections, assigning each to the correct board member. Distribute credentials through your usual secure channel. Students sign in to their own account. Group cards require actual card members, not only a text label or checklist assignment.
-8. Click Refresh & sync as the instructor after setup and after any downtime. Sync paginates board history from activation and deduplicates events. Webhooks keep recording even when no one has the portal open; the portal refreshes every 30 seconds on Overview and Verify. Refresh & sync also catches events between activation and webhook registration. New board members appear after instructor sync.
+8. Click Refresh & sync as the instructor after setup. The server also reconciles Trello history on startup and every five minutes, including after downtime. Sync paginates board history from activation and deduplicates events. Webhooks keep recording even when no one has the portal open; the portal refreshes every 30 seconds on Overview and Verify. Refresh & sync also catches events between activation and webhook registration. New board members appear after instructor sync.
 
 ## Weekly export
 
@@ -48,13 +48,13 @@ SQLite stores baseline cards, immutable raw action payloads, credentials as hash
 
 Mapping is locked after activation to preserve historical interpretation. For another board or changed list IDs, use a new database. If a late event changes a previously confirmed interval, its confirmation no longer matches and the affected interval must be verified again. Do an instructor history sync before preparing final weekly reports, especially after downtime. Current board names reflect the stored baseline plus captured rename actions. Trello access revocation or missed webhooks can make the view stale; the displayed refresh time alone is not a delivery guarantee.
 
-Students have no password-change/recovery screen in this initial version. Plan an administrator-managed account recovery process before broad rollout; there is no secret default password. For a small pilot, create accounts with unique initial credentials. The admin can inspect the audit table directly; there is no audit-export UI.
+Account provides password changes with current-password verification. Instructors can reset student passwords, deactivate/reactivate students, and revoke sessions. Password changes, resets, access changes, and revocation sign out all affected sessions. Share unique reset credentials through your usual secure channel; no recovery email or secret default password is supplied. The instructor can inspect the latest 200 audit entries under Needs attention. There is no audit-download UI.
 
 ## Validation
 
 Run `python3 -m unittest -v`. Timing tests cover group work, pause/resume, reassignment, reordered events, reopening, late-event confirmation invalidation, baseline activation, weekly clipping, and daylight-saving calendar weeks. API integration tests additionally check login, role enforcement, signed webhooks, duplicate delivery, student-specific verification, and spreadsheet report totals.
 
-Live Trello credentials/webhook delivery and your HTTPS ingress must be verified in your environment. Browser rendering was not tested in the build environment. No live Trello board has been modified by creating this package.
+Live Trello credentials/webhook delivery and your HTTPS ingress must be verified in your environment. The review, correction approval, account, and student navigation flows have local browser smoke coverage; live Trello and production ingress still need environment validation. No live Trello board has been modified by creating this package.
 
 ## Branding
 
@@ -84,3 +84,17 @@ The report uses the same calculations as Weekly report and defaults to verified 
 Weekly report and Email report show daily task entries in the reporting timezone (America/New_York by default). Working intervals crossing midnight are split between work dates, including daylight-saving transitions. Verified adjustments are distributed proportionally across the original working intervals; daily reporting does not change total hours. Unfinished tasks can appear when Include unverified time is enabled.
 
 Completed on shows the most recent recorded move into Completed for a currently completed task. It is independent of the work date and can fall outside the selected week. Reopened tasks show Not completed. Tasks already completed before tracking started show Date not recorded rather than an invented date. Spreadsheet copy retains the existing three-column format, with the work date in Activity and completion information in Progress. Email reports include work dates, durations, and completion dates for each student.
+
+
+
+## Corrections, review, and account controls
+
+**Time corrections** lets a student request a replacement total for one finished interval, including already confirmed work, or request a missing interval for a task assigned to them. A reason is required. Missing intervals must be in the past, at most 24 hours long, and cannot contain more claimed hours than elapsed time. A correction to a recorded interval can exceed its original elapsed time, up to 24 hours. Students can see only their own requests; instructors can select a registered student. Requests do not change reports until approved.
+
+**Needs attention** is instructor-only. It includes tracking health, correction requests, completed intervals awaiting confirmation, overlapping task intervals, intervals longer than 12 hours, adjustments greater than 15 minutes, and the latest 200 audit entries. Approval and rejection require a review note. A request whose recorded interval or confirmed amount changed cannot be approved: reject it and request a fresh correction. Requests can be processed only once. Approved missing intervals and corrections flow through the same daily, weekly, and email calculations. Original Trello events and review decisions remain in the database.
+
+Overlap notices appear on workspace screens and in the verification dialog, for current and historical overlaps. Warnings do not divide group hours or automatically subtract time. Confirm actual contribution or request a correction. Missing-time approval can itself create overlaps, so instructors should review the interval dates as well as the requested hours.
+
+Tracking health distinguishes the last signed webhook received from the last successful full history sync. The single server process retries reconciliation every five minutes; errors and syncs older than 15 minutes flag potentially incomplete reports. A recent sync is not proof of webhook delivery. The manual Sync now button remains available. Full history replay and network sync currently serialize database access; large boards or Trello outages can delay portal requests. Keep a single replica.
+
+The new correction, manual-session, and account-status tables are created automatically at startup without changing existing user columns. Back up the database before upgrading. Docker includes the new server module. These features require the connected app; the separate sample preview displays an availability message for the new screens. No automatic email or Trello messages are sent.

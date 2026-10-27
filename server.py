@@ -5,6 +5,10 @@ from datetime import datetime,timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from engine import replay,stamp,summarize_daily,break_reminder
+import improvements
+import sys
+# Feature routes share this process's connection lock when launched as a script.
+if __name__=='__main__':sys.modules['server']=sys.modules[__name__]
 ROOT=Path(__file__).parent
 DB=os.getenv('DATABASE_PATH','data/tracker.db'); Path(DB).parent.mkdir(parents=True,exist_ok=True)
 ORIGIN=os.getenv('PUBLIC_URL','http://localhost:8080').rstrip('/')
@@ -41,6 +45,7 @@ def init():
         CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY,payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS confirmations(session TEXT PRIMARY KEY,seconds REAL NOT NULL,member TEXT NOT NULL,by_user TEXT NOT NULL,note TEXT NOT NULL,at REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,payload TEXT NOT NULL,at REAL NOT NULL);''')
+        improvements.initialize(db)
         if not db.execute('SELECT 1 FROM users WHERE admin=1').fetchone():
             p=os.getenv('ADMIN_PASSWORD','')
             if len(p)<12: raise RuntimeError('Set ADMIN_PASSWORD to at least 12 characters before starting.')
@@ -66,8 +71,30 @@ def state(db):
     cfg=get(db,'config'); base=get(db,'baseline')
     if not cfg or not base: return [],[]
     ev=[json.loads(r[0]) for r in db.execute('SELECT payload FROM events')]
-    return replay(base,ev,cfg['lists'],time.time())
+    cards,sessions=replay(base,ev,cfg['lists'],time.time())
+    sessions.extend(dict(r) for r in db.execute('SELECT * FROM manual_sessions'))
+    return cards,sessions
 def sync(db):
+    put(db,'sync_attempt',time.time())
+    try:
+        _sync(db)
+        put(db,'sync_error',None)
+    except Exception:
+        put(db,'sync_error','Trello reconciliation failed. Check connection settings and retry sync.')
+        db.commit()
+        raise
+
+def reconcile_loop(stop=None):
+    stop=stop or threading.Event()
+    while not stop.is_set():
+        try:
+            with connect() as db:
+                if get(db,'config'):sync(db)
+        except Exception:
+            pass # Persisted health error is visible to instructors; never log credentials.
+        stop.wait(300)
+
+def _sync(db):
     cfg=get(db,'config')
     if not cfg: raise ValueError('Choose a board and map its lists first.')
     base=get(db,'baseline'); since=datetime.fromtimestamp(base['started'],TZ).isoformat()
@@ -124,11 +151,12 @@ class Handler(BaseHTTPRequestHandler):
     def user(self,db):
         c=SimpleCookie(self.headers.get('Cookie','')); token=c.get('session')
         if not token:return None
-        return db.execute('SELECT users.* FROM logins JOIN users ON users.id=logins.user WHERE token=? AND expires>?',(hashlib.sha256(token.value.encode()).hexdigest(),time.time())).fetchone()
+        user=db.execute('SELECT users.* FROM logins JOIN users ON users.id=logins.user WHERE token=? AND expires>?',(hashlib.sha256(token.value.encode()).hexdigest(),time.time())).fetchone()
+        return user if user and not improvements.disabled(db,user['id']) else None
     def do_HEAD(self):
         self.send_response(200 if self.path=='/webhook' else 404);self.end_headers()
     def do_GET(self):
-        if self.path in ('/','/app.js','/break-reminders.js','/email-report.js','/report-dates.js','/style.css'):
+        if self.path in ('/','/app.js','/break-reminders.js','/email-report.js','/report-dates.js','/improvements.js','/style.css'):
             path=ROOT/'static'/({'/':'index.html'}.get(self.path,self.path[1:]))
             raw=path.read_bytes();self.send_response(200)
             self.send_header('Content-Type',{'html':'text/html; charset=utf-8','js':'text/javascript','css':'text/css'}[path.suffix[1:]])
@@ -150,7 +178,7 @@ class Handler(BaseHTTPRequestHandler):
                     bucket='attempt:'+ (uid if target else 'unknown'); attempts=get(db,bucket,[])
                     attempts=[t for t in attempts if t>time.time()-900]
                     if len(attempts)>=10:return self.send({'error':'Too many attempts. Try again in 15 minutes.'},429)
-                    if not target or not valid_password(str(data.get('password','')),target['password']):
+                    if not target or improvements.disabled(db,uid) or not valid_password(str(data.get('password','')),target['password']):
                         attempts.append(time.time());put(db,bucket,attempts);db.commit();return self.send({'error':'Invalid login'},401)
                     put(db,bucket,[]);token=secrets.token_urlsafe(32)
                     db.execute('INSERT INTO logins VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+43200))
@@ -158,6 +186,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not user:return self.send({'error':'Please sign in.'},401)
                 if self.path=='/api/logout':
                     db.execute('DELETE FROM logins WHERE user=?',(user['id'],));return self.send({'ok':True},headers={'Set-Cookie':'session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict'})
+                if improvements.account_route(self,db,user,data):return
                 admin=bool(user['admin'])
                 if self.path in ('/api/boards','/api/inspect','/api/config','/api/users','/api/webhook','/api/break-settings') and not admin:return self.send({'error':'Instructor access required'},403)
                 if self.path=='/api/boards':return self.send(trello('members/me/boards',{'fields':'name,url','filter':'open'}))
@@ -206,6 +235,7 @@ class Handler(BaseHTTPRequestHandler):
                     db.execute('INSERT INTO audit(payload,at) VALUES(?,?)',(json.dumps({'action':'break-settings','member':mid,'settings':settings,'user':user['id']}),time.time()))
                     return self.send({'ok':True})
                 cards,sessions=state(db);cardmap={c['id']:c for c in cards}
+                if improvements.route(self,db,user,data,cards,sessions):return
                 member=user['member']
                 if admin:member=data.get('member') or member
                 if self.path=='/api/reminders':
@@ -237,7 +267,7 @@ class Handler(BaseHTTPRequestHandler):
                 if self.path=='/api/state':
                     cf={r['session']:r['seconds'] for r in db.execute('SELECT * FROM confirmations')}
                     if not admin:sessions=[s for s in sessions if s['member']==member];cards=[c for c in cards if member in c.get('idMembers',[]) or any(s['card']==c['id'] for s in sessions)]
-                    return self.send({'user':{'name':user['name'],'admin':admin,'member':user['member']},'config':get(db,'config'),'members':get(db,'members',[]) if admin else [],'cards':cards,'sessions':sessions,'confirmations':{s['id']:cf[s['id']] for s in sessions if s['id'] in cf},'breakReminders':reminders(db,sessions,user),'breakSettings':break_settings(db) if admin else None,'lastSync':get(db,'last_sync'),'webhook':bool(get(db,'webhook')),'timezone':str(TZ)})
+                    return self.send({'user':{'name':user['name'],'admin':admin,'member':user['member']},'config':get(db,'config'),'members':get(db,'members',[]) if admin else [],'cards':cards,'sessions':sessions,'confirmations':{s['id']:cf[s['id']] for s in sessions if s['id'] in cf},'overlaps':improvements.overlaps(sessions,time.time()),'trackingHealth':improvements.health(db) if admin else None,'breakReminders':reminders(db,sessions,user),'breakSettings':break_settings(db) if admin else None,'lastSync':get(db,'last_sync'),'webhook':bool(get(db,'webhook')),'timezone':str(TZ)})
                 if self.path=='/api/report':
                     if not member:raise ValueError('Select a student.')
                     start,end=report_week(data['week'])
@@ -263,7 +293,8 @@ class Handler(BaseHTTPRequestHandler):
             cfg=get(db,'config')
             if not cfg or payload.get('model',{}).get('id')!=cfg['board']:return self.send({'error':'Wrong board'},403)
             if action.get('id') and action.get('date') and action.get('type'):
-                db.execute('INSERT OR IGNORE INTO events VALUES(?,?)',(action['id'],json.dumps(action)));put(db,'last_sync',time.time())
+                db.execute('INSERT OR IGNORE INTO events VALUES(?,?)',(action['id'],json.dumps(action)));put(db,'last_webhook',time.time())
         self.send({'ok':True})
 if __name__=='__main__':
-    init();ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','8080'))),Handler).serve_forever()
+    init();threading.Thread(target=reconcile_loop,daemon=True).start();ThreadingHTTPServer(('0.0.0.0',int(os.getenv('PORT','8080'))),Handler).serve_forever()
+
