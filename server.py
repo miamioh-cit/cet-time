@@ -156,7 +156,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.send_response(200 if self.path=='/webhook' else 404);self.end_headers()
     def do_GET(self):
-        if self.path in ('/','/app.js','/break-reminders.js','/email-report.js','/report-dates.js','/improvements.js','/style.css'):
+        if self.path in ('/','/app.js','/break-reminders.js','/email-report.js','/report-dates.js','/improvements.js','/theme.js','/style.css'):
             path=ROOT/'static'/({'/':'index.html'}.get(self.path,self.path[1:]))
             raw=path.read_bytes();self.send_response(200)
             self.send_header('Content-Type',{'html':'text/html; charset=utf-8','js':'text/javascript','css':'text/css'}[path.suffix[1:]])
