@@ -60,6 +60,8 @@ Live Trello credentials/webhook delivery and your HTTPS ingress must be verified
 
 ACETime uses navy blue `#1D2458` and red `#E41937`, sampled from the supplied Miami University Polytechnic logo. Colors are defined in `static/style.css`; the sidebar, login wordmark, and browser title use the ACETime name.
 
+The workspace uses a navy sidebar, a light content area, consistent SVG navigation icons, status-colored task cards, and a board completion indicator. The overview counts and progress use existing visible task/session data; recorded and verified hours remain all-date totals. Login, reports, corrections, account forms, and instructor review share the same responsive components. Navigation wraps into a compact grid on phones, with Sign out kept visible. The interface uses local system fonts and includes keyboard focus styles, a skip link, active-page navigation labels, and reduced-motion support.
+
 ## Individual break reminders
 
 Open **Break reminders** to review student break clocks. The default threshold is **4 hours**, with a warning up to **15 minutes before** it is reached. Instructors can change the default or set a threshold for one Trello member (0.25–24 hours), and can reset that member to the default. Settings and per-student snoozes persist in the existing database; no schema migration or new Jenkins credential is required.
